@@ -1,2 +1,5 @@
 # TiChess
-CS IA Project - Chess with an AI for the TI-84 Plus CE
+
+Chess Engine & AI for the TI-84 Plus CE.
+
+Currently very unfinished.
