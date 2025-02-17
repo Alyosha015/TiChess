@@ -4,12 +4,12 @@
 ; the piece list stores the positions of the pieces in an array indexed
 ; from 0-n.
 
+;note that these functions might be called while using the shadow register set.
+
 ;resets all 12 piece lists, since I never need to do it individually anyway.
 ;doesn't need to be fast.
-
 PieceListResetAll:
     ;preserve registers
-    push af
     push bc
     push de
     push hl
@@ -23,25 +23,25 @@ PieceListResetAll:
     ;restore registers
     pop hl
     pop de
-	pop bc
-	pop af
+    pop bc
 
     ret
 
 
-;expects pieceList in IX, square to add in C
+;expects pieceList in IX, square index to add in BC
 PieceListAdd:
     ;data[count]=square
     ;lookup[square]=count
     ;count=count+1
 
-    ld b, 0
-    ld d, 0
+    ld de, 0
 
     ld e, (ix+DATA_SIZE)    ;load count
     inc (ix+DATA_SIZE)
 
-    lea hl, ix
+    push ix
+    pop hl
+    ;lea hl, ix
     add hl, de
     ld (hl), c              ;data[count]=square
 
@@ -51,15 +51,14 @@ PieceListAdd:
     ret
 
 
-;expects pieceList in IX, square to remove in C
+;expects pieceList in IX, square to remove in BC
 PieceListRemove:
     ;moves last element in piecelist to removed piece's location
     ;index=lookup[square]
     ;data[index]=data[--count]
     ;lookup[data[index]]=index
 
-    ld b, 0
-    ld d, 0
+    ld de, 0
 
     dec (ix+DATA_SIZE)
     ld e, (ix+DATA_SIZE)    ;load count-1
@@ -67,7 +66,7 @@ PieceListRemove:
     lea iy, ix
 
     add ix, bc
-    ld bc, (ix+DATA_SIZE+1) ;index=lookup[square]
+    ld c, (ix+DATA_SIZE+1) ;index=lookup[square]
 
     lea hl, iy
     add hl, de
@@ -83,14 +82,11 @@ PieceListRemove:
     ret
 
 
-;expects pieceList in IX, start in C, end in E
+;expects pieceList in IX, start in BC, end in DE
 PieceListMove:
     ;index=lookup[start]
     ;data[index]=end
     ;lookup[end]=index
-
-    ld b, 0
-    ld d, 0
 
     lea iy, ix
 
@@ -114,7 +110,40 @@ PieceListMove:
 ;64 bytes for lookup
 
     DATA_SIZE := 9
-    PIECE_LIST_RESERVE_BYTES_COUNT := 2 * 6 * (DATA_SIZE + 1 + 64) ;888 B
+    PIECE_LIST_RESERVE_BYTES_COUNT := DATA_SIZE + 1 + 64
 
-;allows accessing piece by type and quick iteration.
-pieceLists: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pieceLists:
+pl_black:
+pl_k: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_q: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_r: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_b: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_n: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_p: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_white:
+pl_K: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_Q: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_R: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_B: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_N: rb PIECE_LIST_RESERVE_BYTES_COUNT
+pl_P: rb PIECE_LIST_RESERVE_BYTES_COUNT
+
+;stores address to each piecelist.
+;Index with '(color * 8 + type) * 3' or just '(piece) * 3'
+plTable:
+    dl 0    ;color 0, type 0
+    dl pl_k
+    dl pl_q
+    dl pl_r
+    dl pl_b
+    dl pl_n
+    dl pl_p
+    dl 0    ;color 0, type 7
+
+    dl 0    ;color 1, type 0
+    dl pl_K
+    dl pl_Q
+    dl pl_R
+    dl pl_B
+    dl pl_N
+    dl pl_P

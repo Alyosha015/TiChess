@@ -4,12 +4,13 @@
 
     include "include/ti84pceg.inc"
 
-    format ti executable "TICHESS"
+    include "macros.asm"
 
-    include "include/macros.inc"
+    format ti executable "TICHESS"
 
     include "main.asm"
 
+    include "chess/piece.asm"
     include "chess/board.asm"
     include "chess/move_generator.asm"
     include "chess/piecelist.asm"
