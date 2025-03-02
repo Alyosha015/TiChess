@@ -9,6 +9,30 @@
     MASK_REMOVE_WHITE_CASTLE := 1100b
     MASK_REMOVE_BLACK_CASTLE := 0011b
 
+_rank: db 0
+_file: db 0
+
+;******** Board State ********
+whiteToMove: 
+currentIndex: db 0
+currentColor: db 0
+enemyIndex: db 0
+enemyColor: db 0
+castleFlags: db 0
+epFile: db 0
+capturedPiece: db 0
+
+;96 B - 32 entries max at 3B / entry
+gameStateStack: rb 96
+gameStateSp: db 0
+
+;board representation
+pieces: rb 64
+
+;used by fen loader in BoardLoad
+fenSections: rb 6
+fenSectionsCount: db 0
+
 BoardMakeMove:
 
     ret
@@ -19,8 +43,10 @@ BoardUnmakeMove:
     ret
 
 
-;Expects pointer to fen string on stack.
+;Expects pointer to fen string in HL
 BoardLoad:
+    push hl ;save str pointer
+
     call PieceListResetAll
 
     ld hl, pieces
@@ -36,11 +62,8 @@ BoardLoad:
     ld (capturedPiece), a
     ld (gameStateSp), a
 
-    ;load fen string
-    pop de ;return address
-    pop hl ;load pointer to string
-    push de
-    push hl ;copy of pointer for later
+    pop hl ;load fen string again, but keep it on the stack
+    push hl
 
     ld iy, fenSections
     ld ix, fenSectionsCount
@@ -299,7 +322,7 @@ BoardLoad:
 
     ret
 
-
+;uses OS print functions etc, won't work in 8bpp mode and can be removed for release version.
 BoardPrint:
     ld a, 7
     ld (_file), a
@@ -386,7 +409,7 @@ BoardPrint:
     call ti.os.PutStrFull
     pop hl
 
-;print board
+;print board itself
 .loop_rank:
     ld a, 7
     ld (_file), a
@@ -460,40 +483,3 @@ BoardPrintSideToMove: db "Move: !", 0
 BoardPrintEpFile: db "EP: !", 0
 BoardPrintCastleLabel: db "Castle:", 0
 BoardPrintCastleFlags: db "!!!!", 0
-
-_rank: db 0
-_file: db 0
-
-;******** Board State ********
-whiteToMove: db 0
-
-currentIndex: db 0
-
-currentColor: db 0
-
-enemyIndex: db 0
-
-enemyColor: db 0
-
-castleFlags: db 0
-
-epFile: db 0
-
-capturedPiece: db 0
-
-;96 B - 32 entries max at 3B / entry
-gameStateStack: rb 96
-
-gameStateSp: db 0
-
-;******** Board Piece Representation ********
-
-;allows accessing piece by square
-pieces: rb 64
-
-;****************
-;used by fen loader in BoardLoad
-
-fenSections: rb 6
-
-fenSectionsCount: db 0
