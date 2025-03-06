@@ -11,11 +11,17 @@
 ;code
     include "main.asm"
 
+    ;chess core
     include "chess/piece.asm"
-    include "chess/board.asm"
-    include "chess/movegen.asm"
     include "chess/piecelist.asm"
+    include "chess/board.asm"
+    include "chess/move.asm"
+    include "chess/moves.asm"
+    include "chess/movegen.asm"
+
     include "chess/test/perft.asm"
+
+    include "graphics/ui/gameui.asm"
 
     include "graphics/lcd.asm"
     include "graphics/raster.asm"

@@ -44,7 +44,7 @@ DrawText:
 
     inc ix
     ld a, (ix)
-    cp a, 0
+    cp 0
     jp nz, .drawTextLoop
 
     ret

@@ -131,6 +131,7 @@ pl_P: rb PIECE_LIST_RESERVE_BYTES_COUNT
 ;stores address to each piecelist.
 ;Index with '(color * 8 + type) * 3' or just '(piece) * 3'
 plTable:
+plTableBlack:
     dl 0    ;color 0, type 0
     dl pl_k
     dl pl_q
@@ -139,7 +140,7 @@ plTable:
     dl pl_n
     dl pl_p
     dl 0    ;color 0, type 7
-
+plTableWhite:
     dl 0    ;color 1, type 0
     dl pl_K
     dl pl_Q

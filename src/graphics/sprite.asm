@@ -1,22 +1,30 @@
-;types of sprites:
+;Sprite Data format:
+; 0: Width
+; 1: Height
+; 2: XOffset
+; 3: YOffset
+; 4-6: XOffset * 320 + YOffset
+; 7-n: Image data, either 1bbp or 8bpp (type not stored).
+;
+;Types of sprites:
 ;
 ; 1. 1 bpp - mainly text. Only has a fg and bg color.
-; 2. 8 bpp non-transparent - fastest to draw, essentially a memory copy.
+; 2. 8 bpp - fastest to draw, essentially a memory copy.
 
 ;expects X in BC, Y in L, FG in D, BG in E, and sprite pointer in IX.
 ;if color is 0 it's drawn transparently.
 DrawSprite1bpp:
     ld a, (ix+1) ;don't draw if height is 0
-    cp a, 0
+    cp 0
     ret z
 
     ;load alternate register data
     push de
-    exx
+    exx ;alt reg start
     pop hl
     ld bc, 0
     ld b, (ix+1)
-    exx
+    exx ;alt reg end
 
     ld de, 0
     ld e, l
@@ -70,7 +78,7 @@ DrawSprite1bpp:
     ld e, (ix)
     inc ix
     ld a, d
-    cp a, 8
+    cp 8
     jp c, .lessThan8px
     ld h, 8
     ld a, d
@@ -100,7 +108,7 @@ DrawSprite1bpp:
     sla e
     inc l
     ld a, l
-    cp a, h
+    cp h
     jp nz, .drawPixel
 
     ld a, d
@@ -112,13 +120,9 @@ DrawSprite1bpp:
 
     inc c
     ld a, c
-    cp a, b
+    cp b
     exx ;alt reg end
     jp nz, .drawRow
-
-; .drawPx:
-;     bit 0, a
-;     srl a
 
     ret
 

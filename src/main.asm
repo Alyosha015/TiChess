@@ -3,115 +3,40 @@ Main:
     di
 
     SetBpp ti.lcdBpp8
-    
+
     call LCD_Clear
 
-    ld hl, PaletteStart
-    ld bc, (PaletteEnd-PaletteStart)/2
-    call LCD_LoadPalette
+    ld ix, 0x0D00000
+    set 0, (ix+ti.graphFlags) ;see moves.asm
 
-    ld hl, StartPosFen
-    call BoardLoad
-
-;registers:
-;   BC - x coord (could be done with one byte, but just in case I want the board on the right side)
-;   D - ?
-;   E - y coord
-;   H - x count
-;   L - y count
-
-    ld bc, 0
-    push bc
-    ld de, 0
-    ld l, 0
-.drawBoardRow:
-    pop bc
-    push bc
-    ld h, 0
-.drawBoardSquare:
-    push bc
-    push de
-    push hl
-
-    xor a, a
-    add h
-    add l
-    bit 0, a
-    jp nz, .odd
-.even:
-    ld h, 8
-    jp .skipOdd
-.odd:
-    ld h, 9
-.skipOdd:
-    ld l, e
-    ld d, 30
-    ld e, 30
-    call FillRect
-
-    pop hl
-    pop de
-    pop bc
-
-    ld a, c ;BC += 30
-    add 30
-    ld c, a
-    ld a, b
-    adc 0
-    ld b, a
-
-    inc h
-    ld a, h
-    cp 8
-    jp nz, .drawBoardSquare
-
-    ld a, e
-    add 30
-    ld e, a
-
-    inc l
-    ld a, l
-    cp 8
-    jp nz, .drawBoardRow
-
-    pop bc ;end draw board
-
-    ld c, 0
-;c = loop counter / y coordinate
-.drawLoop:
-    push bc
-
-    ld l, c
-    ld bc, 0
-    ld de, 1
-    ld ix, TestStr
-    call DrawText
-
-    pop bc
-    ld a, c
-    add a, 9
-    ld c, a
-    cp a, 26*9
-    jp nz, .drawLoop
-
-.waitUntilEnterKey:
-    call ti.GetCSC
-    cp a, ti.skEnter
-    jr nz, .waitUntilEnterKey
+    call Game
 
 ;reset everything for OS
     ResetBpp
 
-    call ti.ClrScrn
+    call ti.ClrLCDFull
     call ti.HomeUp
     call ti.DrawStatusBar
 
     ei
     ret
 
-TestStr:
-    db "This is a test to see how fast I can draw text!", 0
-    ;db "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuV", 0
+Game:
+;init:
+    call GameUiInit
+
+    ld hl, StartPosFen
+    call BoardLoad
+
+    call AllocMoves
+
+;main loop
+.gameLoop:
+    call ti.GetCSC
+    cp ti.skEnter
+    jr nz, .gameLoop
+
+    ret
 
 StartPosFen:
     db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0

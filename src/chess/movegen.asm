@@ -1,26 +1,32 @@
-;something to think about: the max number of moves is 218, this comes out
-;to 437 bytes per Moves struct on the stack. Usually this isn't a problem,
-;but I only have a 4KB stack.
+;variables
+moves: rb 3
 
-;Moves Struct:
-; 0-435 = 218 2-byte moves
-; 437   = move count
+attackMap: rb 64
+checkMap: rb 64
+pinMap: rb 64
 
-    MAX_MOVES := 218
-    MOVES_STRUCT_SIZE := MAX_MOVES * 2 + 1
+inCheck: db 0
+inDoubleCheck: db 0
 
+
+movegen_GenerateEnemyAttackMap:
+    
+    ret
+
+movegen_GenerateSlidingMoves:
+
+    ret
+
+;expects moves struct in IX
+;TODO: setting to generate capture moves only, needed for Q-Search
 GenerateMoves:
-    pop de ;return address
-    pop iy ;struct pointer
+    ld hl, moves
+    ld (hl), ix
 
-    push de
+;Init
 
-    ;******** Move Gen Init ********
+;knight moves
 
-    ;testing stuff
-    ;increment move count
-    ld de, MOVES_STRUCT_SIZE-1
-    add iy, de
-    inc (iy)
+;pawn moves
 
     ret
