@@ -28,7 +28,7 @@ DrawSprite1bpp:
 
     ld de, 0
     ld e, l
-    CalcVramIndex ;expects x in BC and y in DE. Stores in HL.
+    CalcScreenIndex ;expects x in BC and y in DE. Stores in HL.
     ld de, LCD_VRAM
     add hl, de
     ld de, (ix+4) ;add sprite position offset
@@ -67,9 +67,9 @@ DrawSprite1bpp:
     ;shadow registers:
     ;   B = height
     ;   C = height counter
+    ;   DE = IY adjust const (320-width)
     ;   H = FG color
     ;   L = BG color
-    ;   DE = IY adjust const (320-width)
 
 .drawRow:
     ld d, c
@@ -82,7 +82,7 @@ DrawSprite1bpp:
     jp c, .lessThan8px
     ld h, 8
     ld a, d
-    sub a, 8
+    sub 8
     ld d, a
     jp .skipLessThan8px
 .lessThan8px:
@@ -93,10 +93,10 @@ DrawSprite1bpp:
     bit 7, e
     exx ;alt reg start
     jp z, .isBG
-    ld a, l
+    ld a, h
     jp .draw
 .isBG:
-    ld a, h
+    ld a, l
 .draw:
     exx ;alt reg end
     cp 0
@@ -127,6 +127,6 @@ DrawSprite1bpp:
     ret
 
 DrawSprite8bpp:
-    CalcVramIndex
+    CalcScreenIndex
 
     ret

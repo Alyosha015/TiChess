@@ -4,7 +4,7 @@ FillRect:
     push de
     ld de, 0
     ld e, l
-    CalcVramIndex
+    CalcScreenIndex
     ld de, LCD_VRAM
     add hl, de ;vram index
     push hl

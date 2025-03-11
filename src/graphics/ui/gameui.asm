@@ -25,10 +25,10 @@ gameui_DrawBoard:
     bit 0, a
     jp nz, .odd
 .even:
-    ld h, 8
+    ld h, 9
     jp .skipOdd
 .odd:
-    ld h, 9
+    ld h, 10
 .skipOdd:
     ld l, e
     ld d, 30
@@ -69,10 +69,29 @@ GameUiInit:
     ld bc, (PaletteEnd-PaletteStart)/2
     call LCD_LoadPalette
 
+    call FontLoadLarge
+
     call gameui_DrawBoard
+
+    ld bc, 0
+    ld l, 0
+    ld d, 2
+    ld e, 0
+    ld ix, LText
+    call DrawTextLarge
+
+    ld bc, 0
+    ld l, 20
+    ld d, 2
+    ld e, 0
+    ld ix, SText
+    call DrawText
 
     ret
 
 GameUiTick:
 
     ret
+
+LText: db "2x Scale Large Text!", 0
+SText: db "Normal Scale Small Text!", 0

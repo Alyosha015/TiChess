@@ -48,16 +48,15 @@ end macro
 
 ;assumes x coordinate is stored in BC, y in DE, and stores result in HL.
 ;equivalent to HL = DE * 320 + BC
-macro CalcVramIndex
+macro CalcScreenIndex
     ld hl, 0
-    add hl, de
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
+    ld h, 64
+    ld l, e
+
+    mlt hl
+
     add hl, bc
+
     ld d, e
     ld e, 0
     add hl, de
