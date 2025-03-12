@@ -22,18 +22,18 @@ Main:
     ret
 
 Game:
-;init:
+;Init
     call GameUiInit
 
     ld hl, StartPosFen
     call BoardLoad
 
-    call AllocMoves
+    call PerftTemp
 
 .gameLoop:
     call ti.GetCSC
     cp ti.skEnter
-    jr nz, .gameLoop
+    jp nz, .gameLoop
 
     ret
 

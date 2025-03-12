@@ -13,11 +13,14 @@ _rank: db 0
 _file: db 0
 
 ;******** Board State ********
-whiteToMove: 
-currentIndex: db 0
-currentColor: db 0
+whiteToMove: db 0
+
+;note: don't change order of next 4 below, BoardSetIndexVars expects them like this
+currentIndex: db 0  ;white=1, black=0
+currentColor: db 0  ;white=8, black=0
 enemyIndex: db 0
 enemyColor: db 0
+
 castleFlags: db 0
 epFile: db 0
 capturedPiece: db 0
@@ -37,11 +40,34 @@ BoardMakeMove:
 
     ret
 
-
 BoardUnmakeMove:
 
     ret
 
+;note: doesn't preserve AF
+BoardSetIndexVars:
+    push ix
+    ld ix, currentIndex
+
+    ld a, (whiteToMove)
+    cp 0
+    jp z, .blackToMove
+
+    ld (ix), 1
+    ld (ix+1), 8
+    ld (ix+2), 0
+    ld (ix+3), 0
+
+    pop ix
+    ret
+.blackToMove:
+    ld (ix), 0
+    ld (ix+1), 0
+    ld (ix+2), 1
+    ld (ix+3), 8
+    
+    pop ix
+    ret
 
 ;Expects pointer to fen string in HL
 BoardLoad:

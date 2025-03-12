@@ -71,27 +71,17 @@ GameUiInit:
 
     call FontLoadLarge
 
-    call gameui_DrawBoard
+    ; call gameui_DrawBoard
 
-    ld bc, 0
-    ld l, 0
-    ld d, 2
-    ld e, 0
-    ld ix, LText
-    call DrawTextLarge
-
-    ld bc, 0
-    ld l, 20
-    ld d, 2
-    ld e, 0
-    ld ix, SText
-    call DrawText
+    ; ld bc, 0
+    ; ld l, 20
+    ; ld d, 2
+    ; ld e, 0
+    ; ld ix, ;??
+    ; call DrawText
 
     ret
 
 GameUiTick:
 
     ret
-
-LText: db "2x Scale Large Text!", 0
-SText: db "Normal Scale Small Text!", 0

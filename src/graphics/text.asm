@@ -6,14 +6,12 @@ FontLoadLarge:
     ;IX - sprite source
     ;IY - destination
 
-    ld hl, font_tbl
+    ld hl, font_tbl_ptr
     ld de, FONT_LARGE_TABLE
     ld (hl), de
 
     ld iy, ti.pixelShadow
     ld ix, FONT_CHAR_32
-
-    
 
     ;registers:
     ;   C - counter
@@ -31,7 +29,7 @@ FontLoadLarge:
 
     ret
 
-font_tbl: rb 3
+font_tbl_ptr: rb 3
 
 ;expects IX and IY filled
 FontLoadLarge_LdSprite:
@@ -41,11 +39,11 @@ FontLoadLarge_LdSprite:
     ;   IX - sprite source
     ;   IY - destination
 ;add jumptable entry
-    ld hl, (font_tbl)
+    ld hl, (font_tbl_ptr)
     ld (hl), iy
     ld de, 3
     add hl, de
-    ld (font_tbl), hl
+    ld (font_tbl_ptr), hl
 
 ;load width / height
     ld b, (ix) ;w

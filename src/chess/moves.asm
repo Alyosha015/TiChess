@@ -17,6 +17,7 @@
     MOVES_STRUCT_SIZE := MAX_MOVES * 3 + 2
 
 ;stores pointer to moves struct in IX, 0 if none if found
+;note that the move count / data won't be 0'd.
 ;preserves registers
 AllocMoves:
     push af
@@ -27,7 +28,7 @@ AllocMoves:
 ;registers:
 ;   IX - address of current struct
 ;   IY - address of current block in lookup
-;   B  - number of structs to check
+;   B  - ?
 ;   C  - counter
 ;   DE - constant offset for IX by struct size
 
@@ -36,8 +37,7 @@ AllocMoves:
 
     ld de, MOVES_STRUCT_SIZE
 
-    ld bc, 0
-    ld b, MAX_MOVES_STRUCTS
+    ld c, 0
 .findFreeBlockLoop:
     ld a, (iy)
     cp 0
@@ -49,7 +49,7 @@ AllocMoves:
 
     inc c
     ld a, c
-    cp b
+    cp MAX_MOVES_STRUCTS
     jp nz, .findFreeBlockLoop
     ;this part runs if no open space is found
     ld ix, 0
@@ -57,7 +57,7 @@ AllocMoves:
 
 .foundEmpty:
     ld (iy), 1
-    ld (ix), b
+    ld (ix), c
     inc ix
     inc ix
 

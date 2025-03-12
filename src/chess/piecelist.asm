@@ -36,8 +36,8 @@ PieceListAdd:
 
     ld de, 0
 
-    ld e, (ix+DATA_SIZE)    ;load count
-    inc (ix+DATA_SIZE)
+    ld e, (ix+PL_DATA_SIZE)    ;load count
+    inc (ix+PL_DATA_SIZE)
 
     push ix
     pop hl
@@ -46,7 +46,7 @@ PieceListAdd:
     ld (hl), c              ;data[count]=square
 
     add ix, bc
-    ld (ix+DATA_SIZE+1), e  ;lookup[square]=count
+    ld (ix+PL_DATA_SIZE+1), e  ;lookup[square]=count
 
     ret
 
@@ -60,13 +60,13 @@ PieceListRemove:
 
     ld de, 0
 
-    dec (ix+DATA_SIZE)
-    ld e, (ix+DATA_SIZE)    ;load count-1
+    dec (ix+PL_DATA_SIZE)
+    ld e, (ix+PL_DATA_SIZE)    ;load count-1
 
     lea iy, ix
 
     add ix, bc
-    ld c, (ix+DATA_SIZE+1) ;index=lookup[square]
+    ld c, (ix+PL_DATA_SIZE+1) ;index=lookup[square]
 
     lea hl, iy
     add hl, de
@@ -77,7 +77,7 @@ PieceListRemove:
     ld (hl), e              ;data[index]=data[count-1]
 
     add iy, de
-    ld (iy+DATA_SIZE+1), c  ;lookup[data[count-1]]=index
+    ld (iy+PL_DATA_SIZE+1), c  ;lookup[data[count-1]]=index
 
     ret
 
@@ -91,14 +91,14 @@ PieceListMove:
     lea iy, ix
 
     add ix, bc
-    ld bc, (ix+DATA_SIZE+1) ;index=lookup[square]
+    ld bc, (ix+PL_DATA_SIZE+1) ;index=lookup[square]
 
     lea hl, iy
     add hl, bc
     ld (hl), e              ;data[index]=end
 
     add iy, de
-    ld (iy+DATA_SIZE+1), c  ;lookup[end]=index
+    ld (iy+PL_DATA_SIZE+1), c  ;lookup[end]=index
 
     ret
 
@@ -109,8 +109,8 @@ PieceListMove:
 ;1 byte for piece count
 ;64 bytes for lookup
 
-    DATA_SIZE := 9
-    PIECE_LIST_RESERVE_BYTES_COUNT := DATA_SIZE + 1 + 64
+    PL_DATA_SIZE := 9
+    PIECE_LIST_RESERVE_BYTES_COUNT := PL_DATA_SIZE + 1 + 64
 
 pieceLists:
 pl_black:
