@@ -1,5 +1,5 @@
 ;variables
-moves: rb 3
+movesPtr: rb 3
 
     KING_NONE := 255
 
@@ -22,13 +22,25 @@ canQueenSideCastle: db 0
 currentPlPtr: rb 3
 enemyPlPtr: rb 3
 
+movegen_IncCheckCount:
+    push hl
+
+    ld hl, inDoubleCheck
+    ld a, (inCheck)
+    ld (hl), a
+    ld hl, inCheck
+    ld (hl), 1
+
+    pop hl
+
+    ret
+
 movegen_GenerateEnemyPinsAndChecks:
     ;registers:
-    ; B -
-    ; C - 
-    ; D - 
-    ; E - isOrthogonalDir
-    ; HL - 
+    ; B - index
+    ; C - piece
+    ; DE - temp
+    ; HL - temp
     ; IX - moves struct
     ; IYH - offset
     ; IYL - squares
@@ -36,9 +48,8 @@ movegen_GenerateEnemyPinsAndChecks:
     ; B - dir
     ; C - dirEnd
     ; D - square counter
-    ; E - 
-    ; H - 
-    ; L - 
+    ; E - foundFriendlyPiece (inSquareLoop)
+    ; HL - 
 
 ;optimization thing, don't search all directions if the enemy
 ;doesn't have sliding pieces to go in those directions
@@ -99,12 +110,122 @@ movegen_GenerateEnemyPinsAndChecks:
     ld a, (hl)
     ld iyl, a
 
+    ld e, 0 ;init foundFriendlyPiece
     exx ;alt reg end
 
+    ld a, (currentKing)
+    add iyh
+    ld b, a ; piece + offset
 .squareLoop:
+    ld hl, pieces
+    ld de, 0
+    ld e, b
+    add hl, de
 
+    ld c, (hl)
+    cp PIECE_NONE
+    jp z, .squareLoopContinue
 
+    ;check color
+    ld a, c
+    and 1000b
+    ld hl, currentColor
+    cp (hl)
+    jp nz, .enemyColor
+.currentColor:
+    exx ;alt reg start
+    ld a, e
+    cp 1
+    jp z, .squareLoopBreakExx
+    ld e, 1
+    exx ;alt reg end
+.enemyColor:
+    ;check if enemy piece is a slider which can attack in this direction, otherwise break out of square-loop.
+    ld a, c
+    and 0111b
+    cp PIECE_QUEEN
+    jp z, .canBeAttacked
 
+;if it's not a queen check rook/bishop
+    exx ;alt reg start
+    bit 3, b
+    jp z, .checkBishop
+.checkRook:
+    cp PIECE_ROOK
+    jp nz, .squareLoopBreakExx
+    jp .canBeAttacked
+.checkBishop:
+    cp PIECE_BISHOP
+    jp nz, .squareLoopBreakExx
+.canBeAttacked:
+    ld a, e
+    exx ;alt reg end
+
+    ld de, 0
+    ld hl, currentKing
+    ld e, (hl)
+
+    cp 0
+    jp z, .isFriendly
+;add to checkmap.
+;   d - loop counter
+;   e - loop limit
+    ld hl, checkMap
+    add hl, de
+    exx ;alt reg start
+    ld a, d
+    exx ;alt reg end
+    ld e, a
+.checkMapLoop:
+    push de
+    ld de, 0
+    ld e, iyh
+    add hl, de
+    pop de
+
+    ld (hl), 1
+
+    inc d
+    ld a, d
+    cp e
+    jp nz, .checkMapLoop
+
+    call movegen_IncCheckCount
+    jp .squareLoopBreak
+;add to pinmap
+.isFriendly:
+    ld hl, pinMap
+    add hl, de
+    exx ;alt reg start
+    ld a, d
+    exx ;alt reg end
+    ld e, a
+.pinMapLoop:
+    push de
+    ld de, 0
+    ld e, iyl
+    add hl, de
+    pop de
+
+    ld (hl), 1
+
+    inc d
+    ld a, d
+    cp e
+    jp nz, .pinMapLoop
+
+.squareLoopContinue:
+    exx ;alt reg start
+    inc d
+    cp iyl
+    exx ;alt reg end
+    jp nz, .squareLoop
+    jp .squareLoopBreak
+.squareLoopBreakExx:
+    exx
+.squareLoopBreak:
+
+;handle direction loop
     exx ;alt reg start
     inc b
     ld a, b
@@ -128,7 +249,7 @@ movegen_GenerateSlidingMoves:
     ret
 
 movegen_Init:
-ld hl, moves
+    ld hl, movesPtr
     ld (hl), ix
 
     ld (ix-1), 0 ;reset move count
