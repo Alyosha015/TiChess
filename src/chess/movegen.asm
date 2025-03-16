@@ -22,6 +22,7 @@ canQueenSideCastle: db 0
 currentPlPtr: rb 3
 enemyPlPtr: rb 3
 
+;doesn't preserve a
 movegen_IncCheckCount:
     push hl
 
@@ -47,9 +48,10 @@ movegen_GenerateEnemyPinsAndChecks:
     ;shadow registers:
     ; B - dir
     ; C - dirEnd
-    ; D - square counter
-    ; E - foundFriendlyPiece (inSquareLoop)
-    ; HL - 
+    ; DE - temp outside of square loop
+    ; D - square loop counter
+    ; E - foundFriendlyPiece
+    ; HL - temp
 
 ;optimization thing, don't search all directions if the enemy
 ;doesn't have sliding pieces to go in those directions
@@ -85,71 +87,82 @@ movegen_GenerateEnemyPinsAndChecks:
 .skipDirCheck:
     ld a, b ;return if you don't have bishops/rooks (startDir 4 and endDir 4)
     cp c
-    ld de, 0
     exx ;alt reg end
     ret z
 
 .dirLoop:
     exx ;alt reg start
+
+    ;load offset (LUT_DirOffset[dirIndex])
+    ld de, 0
     ld hl, LUT_DirOffset
     ld e, b
     add hl, de
     ld a, (hl)
     ld iyh, a
 
-    ld a, (currentKing)
-    sla a
-    sla a
-    sla a
-    add iyh
-
-    ld de, 0
-    ld e, a
-    ld hl, LUT_SquaresToEdge
+    ;calculate number of square to search (LUT_SquaresToEdge[KingIndex * 8 + dirIndex])
+    ld hl, 0
+    ld a, (currentKing) ;king * 8 in HL
+    ld l, a
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld de, 0 ;add dirIndex
+    ld e, b
+    add hl, de
+    ld de, LUT_SquaresToEdge ;add start address of LUT
     add hl, de
     ld a, (hl)
     ld iyl, a
 
-    ld e, 0 ;init foundFriendlyPiece
+    ld de, 0 ;init square counter and foundFriendlyPiece variable
     exx ;alt reg end
 
-    ld a, (currentKing)
-    add iyh
-    ld b, a ; piece + offset
+    ;load start index (where the king is)
+    ld hl, currentKing
+    ld b, (hl)
+
 .squareLoop:
-    ld hl, pieces
+    ld a, b ;index += offset
+    add iyh
+    ld b, a
+
+    ld hl, pieces ;get piece at current index
     ld de, 0
     ld e, b
     add hl, de
-
     ld c, (hl)
+
+    ld a, c ;continue if there's nothing at this square
     cp PIECE_NONE
     jp z, .squareLoopContinue
 
-    ;check color
-    ld a, c
-    and 1000b
+    ld a, c ;check if enemy/friendly piece:
+    and 8
     ld hl, currentColor
     cp (hl)
-    jp nz, .enemyColor
-.currentColor:
+    jp nz, .isEnemyColor
+.isCurrentColor:
     exx ;alt reg start
     ld a, e
     cp 1
     jp z, .squareLoopBreakExx
     ld e, 1
     exx ;alt reg end
-.enemyColor:
+    jp .squareLoopContinue
+.isEnemyColor:
     ;check if enemy piece is a slider which can attack in this direction, otherwise break out of square-loop.
     ld a, c
-    and 0111b
+    and 7
     cp PIECE_QUEEN
-    jp z, .canBeAttacked
+    jp z, .canBeAttackedToExx
 
 ;if it's not a queen check rook/bishop
     exx ;alt reg start
+
     bit 3, b
-    jp z, .checkBishop
+    jp nz, .checkBishop
 .checkRook:
     cp PIECE_ROOK
     jp nz, .squareLoopBreakExx
@@ -157,94 +170,135 @@ movegen_GenerateEnemyPinsAndChecks:
 .checkBishop:
     cp PIECE_BISHOP
     jp nz, .squareLoopBreakExx
+    jp .canBeAttacked
+.canBeAttackedToExx:
+    exx ;alt reg start (doesn't always run)
 .canBeAttacked:
     ld a, e
     exx ;alt reg end
 
+    ld hl, currentKing ;load de with king index
     ld de, 0
-    ld hl, currentKing
     ld e, (hl)
 
-    cp 0
+    cp 1    ;check if friendly piece was found on this line before (meaning it's pinned),
+            ;or not (meaning the attacking piece ic checking the king).
     jp z, .isFriendly
-;add to checkmap.
-;   d - loop counter
-;   e - loop limit
-    ld hl, checkMap
-    add hl, de
-    exx ;alt reg start
-    ld a, d
-    exx ;alt reg end
-    ld e, a
-.checkMapLoop:
-    push de
+
+; add to checkmap:
+    push iy ;preserve IYL / IYH
+
+    ld a, iyh ;used by offset setup
+
+    ;setup start address / index
+    ld iy, checkMap ;iy = checkMap + kingIndex
+    add iy, de
+
+    ;setup offset
+    bit 7, a
+    jp nz, .check_IsNegativeOffset
     ld de, 0
-    ld e, iyh
-    add hl, de
-    pop de
+    jp .check_SkipNegativeOffset
+.check_IsNegativeOffset:
+    ld de, $FFFFFF
+.check_SkipNegativeOffset:
+    ld e, a
 
-    ld (hl), 1
+    ;load loop counter / limit
+    ld h, 0 ;h = loop counter
 
-    inc d
-    ld a, d
-    cp e
+    exx ;alt reg start
+    ld a, d ;get loop limit (squares counter)
+    exx ;alt reg end
+    ld l, a ;l = loop limit
+
+.checkMapLoop:
+    add iy, de
+    ld (iy), 1
+
+    ld a, h
+    inc h
+    cp l
     jp nz, .checkMapLoop
+
+    pop iy ;restore IYL / IYH
 
     call movegen_IncCheckCount
     jp .squareLoopBreak
-;add to pinmap
+
+;add to pinmap:
 .isFriendly:
-    ld hl, pinMap
-    add hl, de
-    exx ;alt reg start
-    ld a, d
-    exx ;alt reg end
-    ld e, a
-.pinMapLoop:
-    push de
+    push iy ;preserve IYL / IYH
+
+    ld a, iyh ;used by offset setup
+
+    ;setup start address / index
+    ld iy, pinMap ;iy = pinMap + kingIndex
+    add iy, de
+
+    ;setup offset
+    bit 7, a
+    jp nz, .pin_IsNegativeOffset
     ld de, 0
-    ld e, iyl
-    add hl, de
-    pop de
+    jp .pin_SkipNegativeOffset
+.pin_IsNegativeOffset:
+    ld de, $FFFFFF
+.pin_SkipNegativeOffset:
+    ld e, a
 
-    ld (hl), 1
+    ;load loop counter / limit
+    ld h, 0 ;h = loop counter
 
-    inc d
-    ld a, d
-    cp e
+    exx ;alt reg start
+    ld a, d ;get loop limit (squares counter)
+    exx ;alt reg end
+    ld l, a ;l = loop limit
+
+.pinMapLoop:
+    add iy, de
+    ld (iy), 1
+
+    ld a, h
+    inc h
+    cp l
     jp nz, .pinMapLoop
+
+    pop iy ;restore IYL / IYH
 
 .squareLoopContinue:
     exx ;alt reg start
-    inc d
+    inc d ;counter
+    ld a, d
     cp iyl
     exx ;alt reg end
     jp nz, .squareLoop
-    jp .squareLoopBreak
-.squareLoopBreakExx:
-    exx
 .squareLoopBreak:
 
 ;handle direction loop
     exx ;alt reg start
+.squareLoopBreakExx:
     inc b
     ld a, b
     cp c
     exx ;alt reg end
     jp nz, .dirLoop
-    
+
     ret
 
 movegen_GenerateEnemyAttackMap:
     ld a, (currentKing)
     cp KING_NONE
-    jp nz, .skipGenerateEnemyPinsAndChecks
+    jp z, .skipGenerateEnemyPinsAndChecks
     call movegen_GenerateEnemyPinsAndChecks
 .skipGenerateEnemyPinsAndChecks:
 
     ret
 
 movegen_GenerateSlidingMoves:
+
+    ret
+
+movegen_KingMoves:
 
     ret
 
@@ -275,7 +329,7 @@ movegen_Init:
     ld bc, plTableWhite
     ld de, plTableBlack
     ld hl, currentPlPtr
-    ld iy, currentPlPtr
+    ld iy, enemyPlPtr
 
     ld a, (whiteToMove)
     cp 1
@@ -350,10 +404,6 @@ movegen_Init:
     ld de, attackMap+1
     ld bc, 64 * 3 - 1
     ldir
-
-    ret
-
-movegen_KingMoves:
 
     ret
 

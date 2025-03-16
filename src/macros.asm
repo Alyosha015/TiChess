@@ -18,6 +18,17 @@ macro print string, x, y
     pop hl
 end macro
 
+macro txt string, x, y
+    pushall
+    ld ix, string
+    ld d, 2
+    ld e, 0
+    ld l, y
+    ld bc, x
+    call DrawText
+    popall
+end macro
+
 macro pushall
     push af
     push bc
