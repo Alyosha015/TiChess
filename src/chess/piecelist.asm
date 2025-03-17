@@ -17,7 +17,7 @@ PieceListResetAll:
     ld hl, pieceLists
     ld (hl), 0
     ld de, pieceLists + 1
-    ld bc, PIECE_LIST_RESERVE_BYTES_COUNT - 1
+    ld bc, PIECE_LIST_RESERVE_BYTES_COUNT * 12 - 1
     ldir
 
     ;restore registers

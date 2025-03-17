@@ -10,7 +10,9 @@ enemyKing: db KING_NONE
 ;   if a king is attacked by a slider the squares which are
 ;   are dangerous to the king, even if the sliding piece
 ;   technically doesn't attack them because the king blocks
-;   them from moving there.
+;   them from moving there. Also includes squares even if it
+;   has an enemy piece to stop the king attacking them for a
+;   similar reason.
 ;check map - squares of pieces checking king and their path
 ;   towards the king for sliding pieces.
 ;pin map - squares along which pinned pieces can move.
@@ -110,12 +112,10 @@ movegen_GenerateEnemyPinsAndChecks:
     ld iyh, a
 
     ;calculate number of square to search (LUT_SquaresToEdge[KingIndex * 8 + dirIndex])
-    ld hl, 0
+    ld hl, $0800
     ld a, (currentKing) ;king * 8 in HL
     ld l, a
-    add hl, hl
-    add hl, hl
-    add hl, hl
+    mlt hl
     ld de, 0 ;add dirIndex
     ld e, b
     add hl, de
@@ -147,7 +147,7 @@ movegen_GenerateEnemyPinsAndChecks:
     jp z, .squareLoopContinue
 
     ld a, c ;check if enemy/friendly piece:
-    and 8
+    and 1000b
     ld hl, currentColor
     cp (hl)
     jp nz, .isEnemyColor
@@ -162,7 +162,7 @@ movegen_GenerateEnemyPinsAndChecks:
 .isEnemyColor:
     ;check if enemy piece is a slider which can attack in this direction, otherwise break out of square-loop.
     ld a, c
-    and 7
+    and 0111b
     cp PIECE_QUEEN
     jp z, .canBeAttackedToExx
 
@@ -313,15 +313,13 @@ movegen_GenerateEnemySlidingAttack:
     exx ;alt reg end
 
 .dirLoop:
-    ld hl, 0 ;load start index in HL
+    ld hl, $0800 ;load start index in HL
     ld a, ixl
     ld l, a
 
     ld c, 0 ;init square-loop counter
 
-    add hl, hl ;(LUT_SquaresToEdge[index * 8 + dirIndex])
-    add hl, hl
-    add hl, hl
+    mlt hl ;(LUT_SquaresToEdge[index * 8 + dirIndex])
     ;add dirIndex
     pop de ;get BC' from either above or from loop iteration part
     ld d, 0
@@ -382,11 +380,190 @@ movegen_GenerateEnemySlidingAttack:
     pop ix ;restore ix
     ret
 
+;expects nothing, preserves nothing
 movegen_GenerateEnemyKnightAttackMap:
+    ld hl, (enemyPlPtr)
+    ld de, PIECE_KNIGHT * 3
+    add hl, de
+    ld ix, (hl)
+    exx ;alt reg start
+    ld b, (ix+PL_DATA_SIZE)
+    ld c, 0 ;init knight loop counter too
+    ld a, b
+    exx ;alt reg end
+    cp 0    ;early return if there are 0 enemy knights
+    ret z
+
+;registers:
+;   B - number of squares
+;   C - square counter
+;   DE - temp
+;   HL - attackMap
+;   IX - piecelist ptr
+;   IY - movement data ptr
+;shadow registers:
+;   B - number of knights
+;   C - knight loop counter
+;   D
+
+.knightLoop:
+    ld de, 0
+    ld e, (ix) ;load knight position
+
+    ld hl, LUT_KnightMoveCount ;load number of squares attacked
+    add hl, de
+    ld b, (hl)
+
+    ;load pointer to knight attacked squares
+    ;LUT_KnightMovement[square * 8]
+    ld hl, $0800
+    ld l, e
+    mlt hl
+    ld de, LUT_KnightMovement
+    add hl, de
+
+    push hl
+    pop iy
+
+    ld c, 0 ;init loop counter
+    ld de, 0 ;used as offset into attackmap in loop below
+.attackSquareLoop:
+    ;de = attacked square
+    ld e, (iy)
+
+    ld hl, attackMap
+    add hl, de
+    ld (hl), 1
+
+    ld a, (currentKing)
+    cp e
+    jp nz, .skipKingInCheck
+
+    ld de, 64 ;checkMap is the 64 bytes after the attackMap in ram
+    add hl, de
+    ld (hl), 1
+    call movegen_IncCheckCount
+.skipKingInCheck:
+
+    ;attack square loop control
+    inc iy
+    inc c
+    ld a, c
+    cp b
+    jp nz, .attackSquareLoop
+
+    ;knight loop control
+    inc ix
+    exx ;alt reg start
+    inc c
+    ld a, c
+    cp b
+    exx ;alt reg end
+    jp nz, .knightLoop
 
     ret
 
 movegen_GenerateEnemyPawnAttackMap:
+    ld hl, (enemyPlPtr)
+    ld de, PIECE_PAWN * 3
+    add hl, de
+    ld ix, (hl)
+    exx ;alt reg start
+    ld b, (ix+PL_DATA_SIZE) ;get length
+    ld c, 0 ;init knight loop counter too
+    ld a, b
+    exx ;alt reg end
+    cp 0    ;early return if there are 0 enemy pawns
+    ret z
+
+;registers:
+;   B - pawn position
+;   C - pawn file
+;   DE - temp
+;   HL - temp
+;   IX - pawn piecelist ptr
+;   IY - 
+;shadow registers:
+;   B - number of pawns
+;   C - pawn loop counter
+;
+;not worrying about reseting DE to 0 since I never set to a value greater than 255 anyway
+;
+.pawnLoop:
+    ld b, (ix) ;load position
+    ld a, b
+    and 0111b ;load pawn file
+    ld c, a ;store file for latter
+
+;attacking right
+    cp 6
+    jp nc, .fileGreaterThan7
+
+    ld a, (whiteToMove) ;calculate attack square
+    cp 0
+    jp z, .blackMove0
+.whiteMove0:
+    ld a, OFFSET_SE
+    jp .skipBlackMove0
+.blackMove0:
+    ld a, OFFSET_NE
+.skipBlackMove0:
+    add b
+
+    ld e, a
+    ld hl, attackMap
+    add hl, de
+    ld (hl), 1
+
+    ld a, (currentKing) ;is the king in check?
+    cp e
+    jp nz, .skipKingAttacked0
+
+    ld de, 64 ;checkMap is 64 bytes ahead of attackMap
+    add hl, de
+    ld (hl), 1
+    call movegen_IncCheckCount
+.skipKingAttacked0:
+.fileGreaterThan7:
+
+;attacking left
+    ld a, c
+    cp 1
+    jp c, .fileLessThan1
+
+    ld a, (whiteToMove)
+    cp 0
+    jp z, .blackMove1
+.whiteMove1:
+    ld a, OFFSET_SW ;wrong vertical direction since they are the enemy pawns moving
+    jp .skipBlackMove1
+.blackMove1:
+    ld a, OFFSET_NW
+.skipBlackMove1:
+    add b
+    ld e, a
+    ld hl, attackMap
+    add hl, de
+    ld (hl), 1
+
+    ld a, (currentKing) ;is the king in check?
+    cp e
+    jp nz, .skipKingAttacked1
+
+    ld de, 64 ;checkMap is 64 bytes ahead of attackMap
+    add hl, de
+    ld (hl), 1
+    call movegen_IncCheckCount
+.skipKingAttacked1:
+.fileLessThan1:
+
+    inc ix
+    exx ;alt reg start
+    inc c
+    ld a, c
+    cp b
+    exx ;alt reg end
+    jp nz, .pawnLoop
 
     ret
 
@@ -479,6 +656,41 @@ movegen_GenerateEnemyAttackMap:
 
     ;generate enemy king attack map
 
+    ld a, (enemyKing)
+    cp KING_NONE
+    jp z, .skipEnemyKingAttacks
+
+    ld hl, LUT_KingMoveCount
+    ld de, 0
+    ld e, a
+    add hl, de
+
+    ld b, (hl) ;load number of moves
+    ld c, 0 ;counter
+
+    ld hl, $0800 ;LUT_KingMovement[square * 8]
+    ld l, a
+    mlt hl
+    ld de, LUT_KingMovement
+    add hl, de
+    push hl
+    pop ix
+    
+    ld de, 0 ;d stays 0 for loop
+.kingMoveLoop:
+    ld hl, attackMap
+    ld e, (ix)
+    add hl, de
+    ld (hl), 1
+
+    inc ix
+    inc c
+    ld a, c
+    cp b
+    jp nz, .kingMoveLoop
+
+.skipEnemyKingAttacks:
+
     ret
 
 movegen_GenerateSlidingMoves:
@@ -558,7 +770,7 @@ movegen_Init:
     ld a, (iy+PL_DATA_SIZE)
     cp 0
     jp z, .noCurrentKing
-
+.hasCurrentKing:
     ld a, (iy)
     ld hl, currentKing
     ld (hl), a
@@ -575,7 +787,7 @@ movegen_Init:
     ld a, (iy+PL_DATA_SIZE)
     cp 0
     jp z, .noEnemyKing
-
+.hasEnemyKing:
     ld a, (iy)
     ld hl, enemyKing
     ld (hl), a

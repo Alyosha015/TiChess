@@ -25,7 +25,7 @@ Game:
 ;Init
     call GameUiInit
 
-    ld hl, TestFen
+    ld hl, StartPosFen
     call BoardLoad
 
     call PerftTemp
@@ -39,9 +39,6 @@ Game:
 
 StartPosFen:
     db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0
-
-TestFen:
-    db "2r5/8/8/2K5/8/4B3/8/6q1 w - - 0 1", 0
 
 PaletteStart:
     db 00000000b, 00000000b ;  0 - 0 0 0 (used as transparent color by some, so I need two blacks)
