@@ -6,6 +6,14 @@ movesPtr: rb 3
 currentKing: db KING_NONE
 enemyKing: db KING_NONE
 
+;attack map - squares currently attacked by the enemy, and
+;   if a king is attacked by a slider the squares which are
+;   are dangerous to the king, even if the sliding piece
+;   technically doesn't attack them because the king blocks
+;   them from moving there.
+;check map - squares of pieces checking king and their path
+;   towards the king for sliding pieces.
+;pin map - squares along which pinned pieces can move.
 ;note: code expects these to be one after the other.
 attackMap: rb 64
 checkMap: rb 64
@@ -277,54 +285,109 @@ movegen_GenerateEnemyPinsAndChecks:
 
     ret
 
-;expects position-index in iyl, start direction in B and end direction in C.
+;expects position index in A, start direction in C and end direction in B.
 ;preserves ix
 movegen_GenerateEnemySlidingAttack:
+    push ix
+
+    ld ixl, a
+
 ;registers:
-;   B - direction index
-;   C - end direction
+;   B - target index
+;   C - square counter
 ;   DE - temp
 ;   HL - temp
 ;   IYH - offset
-;   IYL - index
+;   IYL - squares to edge
+;   IXH - 
+;   IXL - start index
 ;alt registers
-;
-;
+;   B - end direction
+;   C - direction index
 ;
 
-.loop:
-    ld de, 0 ;load offset
-    ld hl, LUT_DirOffset
-    ld e, b
+    push bc ;transfer BC to BC', and place an extra on stack for dirLoop
+    push bc
+    exx ;alt reg start
+    pop bc
+    exx ;alt reg end
+
+.dirLoop:
+    ld hl, 0 ;load start index in HL
+    ld a, ixl
+    ld l, a
+
+    ld c, 0 ;init square-loop counter
+
+    add hl, hl ;(LUT_SquaresToEdge[index * 8 + dirIndex])
+    add hl, hl
+    add hl, hl
+    ;add dirIndex
+    pop de ;get BC' from either above or from loop iteration part
+    ld d, 0
     add hl, de
+    push de ;preserve dirIndex
+    ld de, LUT_SquaresToEdge ;add start address of LUT
+    add hl, de
+    pop de ;restore dirIndex
+    ld a, (hl)
+    cp 0 ;if 0 squares to edge don't loop
+    jp z, .squareLoopBreak
+    ld iyl, a
+
+    ld hl, LUT_DirOffset ;get offset for dirIndex
+    add hl, de           ;DE is still loaded with the dirIndex
     ld a, (hl)
     ld iyh, a
 
-    ld hl, 0 ;(LUT_SquaresToEdge[index * 8 + dirIndex])
-    ld a, iyl
-    ld l, a
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    ld de, 0 ;add dirIndex
+    ld a, ixl ;init start index
+    ld b, a
+.squareLoop:
+    ld a, b ;update target index
+    add iyh
+    ld b, a
+
+    ld hl, attackMap
+    ld de, 0
     ld e, b
     add hl, de
-    ld de, LUT_SquaresToEdge ;add start address of LUT
+    ld (hl), 1
+
+    ld a, (currentKing) ;if the king is in the way, continue marking attacked squares through him.
+    cp b
+    jp z, .squareLoopContinue
+
+    ld hl, pieces ;if there's another piece in the way, break out of the loop.
     add hl, de
     ld a, (hl)
-    ld iyl, a
+    cp PIECE_NONE
+    jp nz, .squareLoopBreak
 
-    exx ;alt reg start
-    exx ;alt reg end
-
-.squareLoop:
-    
+.squareLoopContinue:
+    inc c
+    ld a, c
+    cp iyl
+    jp nz, .squareLoop
 
 .squareLoopBreak:
-    inc b
-    ld a, b
-    cp c
-    jp nz, .loop
+    exx ;alt reg start
+    inc c
+    push bc ;needed for start of loop
+    ld a, c
+    cp b
+    exx ;alt reg end
+    jp nz, .dirLoop
+
+    pop bc ;get rid of extra value on stack from above    
+    pop ix ;restore ix
+    ret
+
+movegen_GenerateEnemyKnightAttackMap:
+
+    ret
+
+movegen_GenerateEnemyPawnAttackMap:
+
     ret
 
 movegen_GenerateEnemyAttackMap:
@@ -345,11 +408,11 @@ movegen_GenerateEnemyAttackMap:
     jp z, .skipQueens
 
     ld h, 0
-.queenAttackLoop:    
-    ld bc, 8 ;start 0, end 8
-    push hl
+.queenAttackLoop:
+    ld b, 8 ;end at dir 8
+    ld c, 0 ;start at dir 0
     ld a, (ix)
-    ld iyl, a
+    push hl
     call movegen_GenerateEnemySlidingAttack
     pop hl
 
@@ -360,13 +423,61 @@ movegen_GenerateEnemyAttackMap:
     jp nz, .queenAttackLoop
 .skipQueens:
 
+    ld hl, (enemyPlPtr)
+    ld de, PIECE_ROOK * 3
+    add hl, de
+    ld ix, (hl)
+    ld l, (ix+PL_DATA_SIZE)
+    ld a, l
+    cp 0
+    jp z, .skipRooks
 
+    ld h, 0
+.rookAttackLoop:
+    ld b, 4 ;end dir
+    ld c, 0 ;start dir
+    ld a, (ix)
+    push hl
+    call movegen_GenerateEnemySlidingAttack
+    pop hl
+
+    inc ix
+    inc h
+    ld a, h
+    cp l
+    jp nz, .rookAttackLoop
 .skipRooks:
 
+    ld hl, (enemyPlPtr)
+    ld de, PIECE_BISHOP * 3
+    add hl, de
+    ld ix, (hl)
+    ld l, (ix+PL_DATA_SIZE)
+    ld a, l
+    cp 0
+    jp z, .skipBishops
 
+    ld h, 0
+.bishopAttackLoop:
+    ld b, 8 ;end dir
+    ld c, 4 ;start dir
+    ld a, (ix)
+    push hl
+    call movegen_GenerateEnemySlidingAttack
+    pop hl
+
+    inc ix
+    inc h
+    ld a, h
+    cp l
+    jp nz, .bishopAttackLoop
 .skipBishops:
 
+    ;knight / pawn attack maps
+    call movegen_GenerateEnemyKnightAttackMap
+    call movegen_GenerateEnemyPawnAttackMap
 
+    ;generate enemy king attack map
 
     ret
 
