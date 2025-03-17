@@ -42,7 +42,7 @@ movegen_GenerateEnemyPinsAndChecks:
     ; C - piece
     ; DE - temp
     ; HL - temp
-    ; IX - moves struct
+    ; IX - none
     ; IYH - offset
     ; IYL - squares
     ;shadow registers:
@@ -186,13 +186,11 @@ movegen_GenerateEnemyPinsAndChecks:
     jp z, .isFriendly
 
 ; add to checkmap:
-    push iy ;preserve IYL / IYH
-
     ld a, iyh ;used by offset setup
 
     ;setup start address / index
-    ld iy, checkMap ;iy = checkMap + kingIndex
-    add iy, de
+    ld ix, checkMap ;iy = checkMap + kingIndex
+    add ix, de
 
     ;setup offset
     bit 7, a
@@ -213,28 +211,24 @@ movegen_GenerateEnemyPinsAndChecks:
     ld l, a ;l = loop limit
 
 .checkMapLoop:
-    add iy, de
-    ld (iy), 1
+    add ix, de
+    ld (ix), 1
 
     ld a, h
     inc h
     cp l
     jp nz, .checkMapLoop
 
-    pop iy ;restore IYL / IYH
-
     call movegen_IncCheckCount
     jp .squareLoopBreak
 
 ;add to pinmap:
 .isFriendly:
-    push iy ;preserve IYL / IYH
-
     ld a, iyh ;used by offset setup
 
     ;setup start address / index
-    ld iy, pinMap ;iy = pinMap + kingIndex
-    add iy, de
+    ld ix, pinMap ;iy = pinMap + kingIndex
+    add ix, de
 
     ;setup offset
     bit 7, a
@@ -255,15 +249,13 @@ movegen_GenerateEnemyPinsAndChecks:
     ld l, a ;l = loop limit
 
 .pinMapLoop:
-    add iy, de
-    ld (iy), 1
+    add ix, de
+    ld (ix), 1
 
     ld a, h
     inc h
     cp l
     jp nz, .pinMapLoop
-
-    pop iy ;restore IYL / IYH
 
 .squareLoopContinue:
     exx ;alt reg start
@@ -285,12 +277,96 @@ movegen_GenerateEnemyPinsAndChecks:
 
     ret
 
+;expects position-index in iyl, start direction in B and end direction in C.
+;preserves ix
+movegen_GenerateEnemySlidingAttack:
+;registers:
+;   B - direction index
+;   C - end direction
+;   DE - temp
+;   HL - temp
+;   IYH - offset
+;   IYL - index
+;alt registers
+;
+;
+;
+
+.loop:
+    ld de, 0 ;load offset
+    ld hl, LUT_DirOffset
+    ld e, b
+    add hl, de
+    ld a, (hl)
+    ld iyh, a
+
+    ld hl, 0 ;(LUT_SquaresToEdge[index * 8 + dirIndex])
+    ld a, iyl
+    ld l, a
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld de, 0 ;add dirIndex
+    ld e, b
+    add hl, de
+    ld de, LUT_SquaresToEdge ;add start address of LUT
+    add hl, de
+    ld a, (hl)
+    ld iyl, a
+
+    exx ;alt reg start
+    exx ;alt reg end
+
+.squareLoop:
+    
+
+.squareLoopBreak:
+    inc b
+    ld a, b
+    cp c
+    jp nz, .loop
+    ret
+
 movegen_GenerateEnemyAttackMap:
     ld a, (currentKing)
     cp KING_NONE
     jp z, .skipGenerateEnemyPinsAndChecks
     call movegen_GenerateEnemyPinsAndChecks
 .skipGenerateEnemyPinsAndChecks:
+
+;generate attack maps for sliding pieces
+    ld hl, (enemyPlPtr)
+    ld de, PIECE_QUEEN * 3
+    add hl, de
+    ld ix, (hl)
+    ld l, (ix+PL_DATA_SIZE) ;store length in L, (H is used as the loop counter)
+    ld a, l
+    cp 0
+    jp z, .skipQueens
+
+    ld h, 0
+.queenAttackLoop:    
+    ld bc, 8 ;start 0, end 8
+    push hl
+    ld a, (ix)
+    ld iyl, a
+    call movegen_GenerateEnemySlidingAttack
+    pop hl
+
+    inc ix
+    inc h
+    ld a, h
+    cp l
+    jp nz, .queenAttackLoop
+.skipQueens:
+
+
+.skipRooks:
+
+
+.skipBishops:
+
+
 
     ret
 
@@ -412,7 +488,11 @@ movegen_Init:
 GenerateMoves:
     call movegen_Init
 
+    push ix
+
     call movegen_GenerateEnemyAttackMap
+
+    pop ix
 
     call movegen_KingMoves
 

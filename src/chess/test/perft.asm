@@ -5,6 +5,12 @@ RunPerftTestSuite:
 PerftTemp:
     call AllocMoves
     call GenerateMoves
+
+    ld hl, DBG_PB_YOFFSET
+    ld (hl), 5
+
+    ld hl, DBG_PB_XOFFSET
+    ld (hl), 0
     ld iy, pinMap
     call Debug_PrintBoard
 
@@ -12,6 +18,18 @@ PerftTemp:
     ld (hl), 8 * 9
     ld iy, checkMap
     call Debug_PrintBoard
+
+    ld hl, DBG_PB_XOFFSET
+    ld (hl), 16 * 9
+    ld iy, attackMap
+    call Debug_PrintBoard
+
+    ld bc, 1
+    ld l, 1
+    ld d, 2
+    ld e, 0
+    ld ix, MovgenMapLabel
+    call DrawText
 
     ld de, 0
     ld a, (varD)
@@ -39,13 +57,16 @@ PerftTemp:
     pop de
 
     ld bc, 1
-    ld l, 75
+    ld l, 82
     ld d, 2
     ld e, 0
     ld ix, ResultStr
     call DrawTextLarge
 
     ret
+
+MovgenMapLabel: db "Pin         Check      Attack", 0
+
 varA: db 0
 varB: db 0
 varC: db 0
