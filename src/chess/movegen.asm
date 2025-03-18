@@ -567,14 +567,7 @@ movegen_GenerateEnemyPawnAttackMap:
 
     ret
 
-movegen_GenerateEnemyAttackMap:
-    ld a, (currentKing)
-    cp KING_NONE
-    jp z, .skipGenerateEnemyPinsAndChecks
-    call movegen_GenerateEnemyPinsAndChecks
-.skipGenerateEnemyPinsAndChecks:
-
-;generate attack maps for sliding pieces
+movegen_GenerateEnemySlidingAttacks:
     ld hl, (enemyPlPtr)
     ld de, PIECE_QUEEN * 3
     add hl, de
@@ -649,16 +642,12 @@ movegen_GenerateEnemyAttackMap:
     cp l
     jp nz, .bishopAttackLoop
 .skipBishops:
+    ret
 
-    ;knight / pawn attack maps
-    call movegen_GenerateEnemyKnightAttackMap
-    call movegen_GenerateEnemyPawnAttackMap
-
-    ;generate enemy king attack map
-
+movegen_GenerateEnemyKingAttacks:
     ld a, (enemyKing)
     cp KING_NONE
-    jp z, .skipEnemyKingAttacks
+    ret z
 
     ld hl, LUT_KingMoveCount
     ld de, 0
@@ -689,15 +678,38 @@ movegen_GenerateEnemyAttackMap:
     cp b
     jp nz, .kingMoveLoop
 
-.skipEnemyKingAttacks:
+    ret
+
+movegen_GenerateEnemyAttackMap:
+    ld a, (currentKing)
+    cp KING_NONE
+    jp z, .skipGenerateEnemyPinsAndChecks
+    call movegen_GenerateEnemyPinsAndChecks
+.skipGenerateEnemyPinsAndChecks:
+
+    call movegen_GenerateEnemySlidingAttacks
+    call movegen_GenerateEnemyKnightAttackMap
+    call movegen_GenerateEnemyPawnAttackMap
+    call movegen_GenerateEnemyKingAttacks
+
+    ret
+
+movegen_KingMoves:
+
+    ret
+
+movegen_GenerateSlidingPieceMoves:
 
     ret
 
 movegen_GenerateSlidingMoves:
 
     ret
+movegen_GenerateKnightMoves:
 
-movegen_KingMoves:
+    ret
+
+movegen_GeneratePawnMoves:
 
     ret
 
@@ -812,9 +824,7 @@ GenerateMoves:
     call movegen_Init
 
     push ix
-
     call movegen_GenerateEnemyAttackMap
-
     pop ix
 
     call movegen_KingMoves
@@ -823,5 +833,9 @@ GenerateMoves:
     ld a, (inDoubleCheck)
     cp 1
     ret z
+
+    call movegen_GenerateSlidingMoves
+    call movegen_GenerateKnightMoves
+    call movegen_GeneratePawnMoves
 
     ret

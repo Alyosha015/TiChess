@@ -3,7 +3,7 @@ RunPerftTestSuite:
     ret
 
 TestFen:
-    db "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8", 0
+    db "1k6/2q5/8/4Q3/8/R5K1/8/8 w - - 0 1", 0
 
 PerftTemp:
     ;or use StartPosFen

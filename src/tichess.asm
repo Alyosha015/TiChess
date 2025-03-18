@@ -32,3 +32,6 @@
     include "data/font.asm"
     include "data/sprites.asm"
     include "data/chessLUTs.asm"
+
+;debugging
+    include "debug/console.asm"
