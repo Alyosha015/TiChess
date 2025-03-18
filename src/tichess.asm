@@ -34,4 +34,4 @@
     include "data/chessLUTs.asm"
 
 ;debugging
-    include "debug/console.asm"
+;    include "debug/console.asm"

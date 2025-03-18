@@ -31,8 +31,6 @@ Game:
     call PerftTemp
 
 .gameLoop:
-    call ConsoleTick
-
     call ti.GetCSC
     cp ti.skEnter
     jp nz, .gameLoop

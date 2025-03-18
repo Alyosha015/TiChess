@@ -694,17 +694,178 @@ movegen_GenerateEnemyAttackMap:
 
     ret
 
+;^^^^ End of enemy-related movgen routines ^^^^
+
+;expects start in E, end in D.
+;doesn't preserve HL, DE, A
+movegen_AddMove:
+    xor a
+;expects start in E, end in D, flag in A.
+;doesn't preserve HL, DE, A
+movegen_AddMoveFlags:
+    push bc
+    ld hl, movesPtr ;load moves struct pointer
+    ld hl, (hl)
+
+    dec hl ;access move counter
+
+    ld bc, $0300 ;calculate offset to store next move (moveCount * 3)
+    ld c, (hl)
+    mlt bc
+
+    inc (hl) ;increment move counter
+    inc hl ;point to first move again
+
+    add hl, bc ;add offset
+    ld (hl), de ;load move start/end (IX+2)=E, (IX+1)=D 
+    ld (hl), a ;load move flags (IX+0)=A
+
+    pop bc
+    ret
+
+;used to check if a pinned piece's movement is legal.
+;expects target square in D and dirOffset in E.
+;sets z flag if legal
+movegen_MovingOnRay:
+    ;LUT_SquareToSquareDir[63 + targetSquare - raySource]
+
+    push de ;preserve dirOffset
+
+    ld a, (currentKing)
+    neg
+    add 63
+    add d
+
+    ld de, 0
+    ld e, a
+
+    ld hl, LUT_SquareToSquareDir
+    add hl, de
+    ld a, (hl)
+
+    pop de ;restore dirOffset
+
+    cp e ;check if look-up table value == dirOffset
+    ret z
+
+    neg ;check if negative of look-up table value == dirOffset
+        ;which is parallel to the direction vector.
+    cp e
+    ret
+
+;expects castle type in DE
+;doesn't preserve DE and HL
+movegen_CanCastle:
+    ld hl, LUT_CastleFlagToStartPos
+    add hl, de
+    ld a, (hl)
+
+    ld de, 0
+    ld e, a ;start
+    add 2
+    ld d, a ;end
+
+
+    ld hl, attackMap
+
+
+
+    ret
+
+LUT_CastleFlagToStartPos:
+    db 0, 4, 2, 0, 60, 0, 0, 0, 58
+
 movegen_KingMoves:
 
     ret
 
+;expects position index in A, start direction in C and end direction in B.
 movegen_GenerateSlidingPieceMoves:
-
+    
     ret
 
+;basically the same as enemy version, differences is using currentPlPtr,
+;and calling a different function in eah loop.
+; 
+;so I could probably combine the too if I wanted to save 100 bytes.
+;
 movegen_GenerateSlidingMoves:
+    ld hl, (currentPlPtr)
+    ld de, PIECE_QUEEN * 3
+    add hl, de
+    ld ix, (hl)
+    ld l, (ix+PL_DATA_SIZE) ;store length in L, (H is used as the loop counter)
+    ld a, l
+    cp 0
+    jp z, .skipQueens
 
+    ld h, 0
+.queenAttackLoop:
+    ld b, 8 ;end at dir 8
+    ld c, 0 ;start at dir 0
+    ld a, (ix)
+    push hl
+    call movegen_GenerateSlidingMoves
+    pop hl
+
+    inc ix
+    inc h
+    ld a, h
+    cp l
+    jp nz, .queenAttackLoop
+.skipQueens:
+
+    ld hl, (currentPlPtr)
+    ld de, PIECE_ROOK * 3
+    add hl, de
+    ld ix, (hl)
+    ld l, (ix+PL_DATA_SIZE)
+    ld a, l
+    cp 0
+    jp z, .skipRooks
+
+    ld h, 0
+.rookAttackLoop:
+    ld b, 4 ;end dir
+    ld c, 0 ;start dir
+    ld a, (ix)
+    push hl
+    call movegen_GenerateSlidingMoves
+    pop hl
+
+    inc ix
+    inc h
+    ld a, h
+    cp l
+    jp nz, .rookAttackLoop
+.skipRooks:
+
+    ld hl, (currentPlPtr)
+    ld de, PIECE_BISHOP * 3
+    add hl, de
+    ld ix, (hl)
+    ld l, (ix+PL_DATA_SIZE)
+    ld a, l
+    cp 0
+    jp z, .skipBishops
+
+    ld h, 0
+.bishopAttackLoop:
+    ld b, 8 ;end dir
+    ld c, 4 ;start dir
+    ld a, (ix)
+    push hl
+    call movegen_GenerateSlidingMoves
+    pop hl
+
+    inc ix
+    inc h
+    ld a, h
+    cp l
+    jp nz, .bishopAttackLoop
+.skipBishops:
     ret
+
 movegen_GenerateKnightMoves:
 
     ret
@@ -823,9 +984,7 @@ movegen_Init:
 GenerateMoves:
     call movegen_Init
 
-    push ix
     call movegen_GenerateEnemyAttackMap
-    pop ix
 
     call movegen_KingMoves
 
