@@ -24,14 +24,11 @@ GameInit:
 
 ;Game Init
 ;(mainly temp testing stuff at the moment)
+    ld hl, StartPosFen
+    call BoardLoad
+    
     call boardui_DrawForce
-
-    ld bc, 1
-    ld l, 1
-    ld de, $0200
-    ld ix, SPRITE_KING
-    call DrawSprite1bpp
-
+    
     ret
 
     GAME_UI_TITLE := 0

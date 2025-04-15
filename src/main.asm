@@ -1,18 +1,17 @@
 Main:
-    call ti.RunIndicOff
     di
 
     SetBpp ti.lcdBpp8
 
     call LCD_Clear
 
-    ld ix, 0x0D00000
-    set 0, (ix+ti.graphFlags) ;see moves.asm
-
     call App
 
 ;reset everything for OS
     ResetBpp
+
+    ld ix, 0x0D00000
+    set 0, (ix+ti.graphFlags) ;see moves.asm
 
     call ti.ClrLCDFull
     call ti.HomeUp
@@ -24,23 +23,31 @@ Main:
 App:
     call GameInit
 
-    ld hl, StartPosFen
-    call BoardLoad
-
-    ;call PerftTemp
-
 .gameLoop:
     call GameTick
 
-    call ti.GetCSC
+    ei ;note: need to enable interrupts
+    call ti.os.GetCSC
+    di
+
     cp ti.skEnter
-    jp nz, .gameLoop
+    jp nz, .enterKeyNotPressed
+    call Exit
+.enterKeyNotPressed:
+
+    ld a, (main_run)
+    cp 1
+    jp z, .gameLoop
 
     ret
 
+;call to fully stop the game on next tick.
 Exit:
-
+    xor a
+    ld (main_run), a
     ret
+
+main_run: db 1
 
 StartPosFen:
     db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0

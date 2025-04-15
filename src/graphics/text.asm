@@ -207,6 +207,72 @@ FONT2X_COPY_LUT:
     db 11000000b, 00110000b, 00001100b, 00000011b
     db 11000000b, 00110000b, 00001100b, 00000011b
 
+;get width of text string in pixels using 2X font.
+;result stored in BC. Preserves all registers except BC.
+LargeTextRenderSize:
+    call TextRenderSize
+
+    push hl
+    push bc
+    pop hl
+    add hl, hl
+    push hl
+    pop bc
+    pop hl
+
+    ret
+
+;get width of text string in pixels.
+;result stored in BC. Preserves all registers except BC.
+TextRenderSize:
+    push ix
+    push de
+    push hl
+
+;registers:
+;   BC - size
+;   DE - temp
+;   HL - temp
+;   IX - str pointer
+    
+    ld de, 0
+    ld bc, 0
+.textLoop:
+    ld a, (ix)
+    sub 32
+    
+    ld d, 3
+    ld e, a
+    ld hl, FONT_TABLE
+    mlt de
+    add hl, de
+
+    ld hl, (hl) ;now has sprite data ptr
+
+    ld a, (hl) ;add sprite width
+
+    add c
+    ld c, a
+    ld a, b
+    adc 0
+    ld b, a
+
+    inc ix
+    ld a, (ix)
+    cp 0
+    jp nz, .textLoop
+
+    ld hl, -1 ;decrement by 1 since the last character doesn't need a empty line after it.
+    add hl, bc
+    push hl
+    pop bc
+
+    pop hl
+    pop de
+    pop ix
+
+    ret
+
 ;expects x (0-319) in BC, y (0-239) in L, FG in D, BG in E, and string pointer in IX
 DrawTextLarge:
     push hl
@@ -254,7 +320,7 @@ DrawTextSkipLoad:
     mlt hl
     ld de, (selected_font_table)
     add hl, de
-    ld ix, (hl) ;store address to sprite
+    ld ix, (hl) ;get address to sprite
 
     pop de
     pop hl
