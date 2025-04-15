@@ -86,7 +86,6 @@ movegen_GenerateEnemyPinsAndChecks:
     jp nz, .hasRooks
     ld b, 4
 .hasRooks:
-    ld de, 3
     add hl, de ;bishops
     ld iy, (hl)
     ld a, (iy+PL_DATA_SIZE)
@@ -147,7 +146,7 @@ movegen_GenerateEnemyPinsAndChecks:
     jp z, .squareLoopContinue
 
     ld a, c ;check if enemy/friendly piece:
-    and 1000b
+    and MASK_PIECE_COLOR
     ld hl, currentColor
     cp (hl)
     jp nz, .isEnemyColor
@@ -162,7 +161,7 @@ movegen_GenerateEnemyPinsAndChecks:
 .isEnemyColor:
     ;check if enemy piece is a slider which can attack in this direction, otherwise break out of square-loop.
     ld a, c
-    and 0111b
+    and MASK_PIECE_TYPE
     cp PIECE_QUEEN
     jp z, .canBeAttackedToExx
 
@@ -286,8 +285,9 @@ movegen_GenerateEnemyPinsAndChecks:
     ret
 
 ;expects position index in A, start direction in C and end direction in B.
-;preserves ix
+;preserves IX and HL
 movegen_GenerateEnemySlidingAttack:
+    push hl
     push ix
 
     ld ixl, a
@@ -297,10 +297,10 @@ movegen_GenerateEnemySlidingAttack:
 ;   C - square counter
 ;   DE - temp
 ;   HL - temp
-;   IYH - offset
-;   IYL - squares to edge
 ;   IXH - 
 ;   IXL - start index
+;   IYH - offset
+;   IYL - squares to edge
 ;alt registers
 ;   B - end direction
 ;   C - direction index
@@ -316,8 +316,6 @@ movegen_GenerateEnemySlidingAttack:
     ld hl, $0800 ;load start index in HL
     ld a, ixl
     ld l, a
-
-    ld c, 0 ;init square-loop counter
 
     mlt hl ;(LUT_SquaresToEdge[index * 8 + dirIndex])
     ;add dirIndex
@@ -338,8 +336,8 @@ movegen_GenerateEnemySlidingAttack:
     ld a, (hl)
     ld iyh, a
 
-    ld a, ixl ;init start index
-    ld b, a
+    ld b, ixl ;init target index
+    ld c, 0 ;init square-loop counter
 .squareLoop:
     ld a, b ;update target index
     add iyh
@@ -376,8 +374,10 @@ movegen_GenerateEnemySlidingAttack:
     exx ;alt reg end
     jp nz, .dirLoop
 
-    pop bc ;get rid of extra value on stack from above    
+    pop bc ;get rid of extra value added to stack above
+ 
     pop ix ;restore ix
+    pop hl ;restore hl
     ret
 
 ;expects nothing, preserves nothing
@@ -386,6 +386,7 @@ movegen_GenerateEnemyKnightAttackMap:
     ld de, PIECE_KNIGHT * 3
     add hl, de
     ld ix, (hl)
+
     exx ;alt reg start
     ld b, (ix+PL_DATA_SIZE)
     ld c, 0 ;init knight loop counter too
@@ -421,7 +422,6 @@ movegen_GenerateEnemyKnightAttackMap:
     mlt hl
     ld de, LUT_KnightMovement
     add hl, de
-
     push hl
     pop iy
 
@@ -492,7 +492,7 @@ movegen_GenerateEnemyPawnAttackMap:
 .pawnLoop:
     ld b, (ix) ;load position
     ld a, b
-    and 0111b ;load pawn file
+    and 111b ;load pawn file
     ld c, a ;store file for latter
 
 ;attacking right
@@ -582,9 +582,8 @@ movegen_GenerateEnemySlidingAttacks:
     ld b, 8 ;end at dir 8
     ld c, 0 ;start at dir 0
     ld a, (ix)
-    push hl
+
     call movegen_GenerateEnemySlidingAttack
-    pop hl
 
     inc ix
     inc h
@@ -607,9 +606,8 @@ movegen_GenerateEnemySlidingAttacks:
     ld b, 4 ;end dir
     ld c, 0 ;start dir
     ld a, (ix)
-    push hl
+
     call movegen_GenerateEnemySlidingAttack
-    pop hl
 
     inc ix
     inc h
@@ -632,9 +630,8 @@ movegen_GenerateEnemySlidingAttacks:
     ld b, 8 ;end dir
     ld c, 4 ;start dir
     ld a, (ix)
-    push hl
+
     call movegen_GenerateEnemySlidingAttack
-    pop hl
 
     inc ix
     inc h
@@ -696,13 +693,13 @@ movegen_GenerateEnemyAttackMap:
 
 ;^^^^ End of enemy-related movgen routines ^^^^
 
-;expects start in E, end in D.
+;expects start in D, end in E.
 ;doesn't preserve HL, DE, A
 movegen_AddMove:
     xor a
-;expects start in E, end in D, flag in A.
-;doesn't preserve HL, DE, A
-movegen_AddMoveFlags:
+;expects start in D, end in E, flag in A.
+;doesn't preserve HL/A. Preserves DE
+movegen_AddMoveFlag:
     push bc
     ld hl, movesPtr ;load moves struct pointer
     ld hl, (hl)
@@ -717,58 +714,70 @@ movegen_AddMoveFlags:
     inc hl ;point to first move again
 
     add hl, bc ;add offset
-    ld (hl), de ;load move start/end (IX+2)=E, (IX+1)=D 
-    ld (hl), a ;load move flags (IX+0)=A
+    ld (hl), d ;load move start/end (HL+0)=D, (HL+1)=E 
+    inc hl
+    ld (hl), e
+    inc hl
+    ld (hl), a ;load move flags (HL+2)=A
 
     pop bc
     ret
 
 ;used to check if a pinned piece's movement is legal.
-;expects target square in D and dirOffset in E.
+;expects target square in B and dirOffset in C.
+;doesn't preserve HL/A, preserves BC
 ;sets z flag if legal
 movegen_MovingOnRay:
     ;LUT_SquareToSquareDir[63 + targetSquare - raySource]
 
-    push de ;preserve dirOffset
+    push bc ;preserve dirOffset
 
     ld a, (currentKing)
     neg
     add 63
-    add d
+    add b
 
-    ld de, 0
-    ld e, a
+    ld bc, 0
+    ld c, a
 
     ld hl, LUT_SquareToSquareDir
-    add hl, de
+    add hl, bc
     ld a, (hl)
 
-    pop de ;restore dirOffset
+    pop bc ;restore dirOffset
 
-    cp e ;check if look-up table value == dirOffset
+    cp c ;check if look-up table value == dirOffset
     ret z
 
     neg ;check if negative of look-up table value == dirOffset
         ;which is parallel to the direction vector.
-    cp e
+    cp c
     ret
 
 ;expects castle type in DE
 ;doesn't preserve DE and HL
+;sets z flag if CANT castle.
 movegen_CanCastle:
     ld hl, LUT_CastleFlagToStartPos
     add hl, de
-    ld a, (hl)
-
-    ld de, 0
-    ld e, a ;start
-    add 2
-    ld d, a ;end
-
+    ld e, (hl)
 
     ld hl, attackMap
+    add hl, de
 
+    ld e, 0
+.isSquareAttackedLoop:
+    ld a, (hl) ;early return if square is attacked.
+    cp 1
+    ret z
 
+    inc hl ;loop iteration
+    inc e
+    ld a, e
+    cp 2
+    jp nz, .isSquareAttackedLoop
+
+    or a ;reset z flag
 
     ret
 
@@ -776,19 +785,314 @@ LUT_CastleFlagToStartPos:
     db 0, 4, 2, 0, 60, 0, 0, 0, 58
 
 movegen_KingMoves:
+    ld a, (currentKing)
+    cp KING_NONE
+    ret z ;early return if no king
+ 
+    ;registers:
+    ;   B - 
+    ;   C - 
+    ;   DE - temp
+    ;   HL - temp
+    ;   IXH - number of moves
+    ;   IXL - move counter
+    ;   IY - movement ptr
+
+    ld de, 0
+    ld e, a
+    ld hl, LUT_KingMoveCount
+    add hl, de
+    ld a, (hl)
+    ld ixh, a
+    ld ixl, 0
+
+    ld hl, $0800
+    ld l, e
+    mlt hl
+    ld de, LUT_KingMovement
+    add hl, de
+    push hl
+    pop iy
+
+    ld de, 0
+.moveLoop:
+    ld e, (iy) ;target square
+    ld hl, pieces
+    add hl, de
+    ld a, (hl) ;piece at position
+    cp PIECE_NONE
+    jp z, .skipIsEnemyCheck
+    and MASK_PIECE_COLOR
+    ld hl, enemyColor
+    cp (hl)
+    jp nz, .moveLoopContinue
+.skipIsEnemyCheck:
+    ;don't move to a square that's being attacked.
+    ld hl, attackMap
+    add hl, de
+    ld a, (hl)
+    cp 1
+    jp z, .moveLoopContinue
+
+    ld a, (currentKing)
+    ld d, a ;start pos
+    call movegen_AddMove
+    ld de, 0
+.moveLoopContinue:
+    inc iy
+    inc ixl
+    ld a, ixl
+    cp ixh
+    jp nz, .moveLoop
+
+;don't check for castling moves if in check
+    ld a, (inCheck)
+    cp 1
+    ret z
+
+    ld a, (canKingSideCastle)
+    cp 0
+    jp z, .skipKingSideCastle
+
+    ;check if path is clear of other pieces
+    ld c, 1
+    ld hl, pieces
+    ld de, 0
+    ld a, (currentKing)
+    ld e, a
+    add hl, de
+    ld de, OFFSET_E
+.kingSideIsClearLoop:
+    add hl, de
+    ld a, (hl)
+    cp PIECE_NONE
+    jp nz, .skipKingSideCastle
+
+    inc c
+    ld a, c
+    cp 3
+    jp nz, .kingSideIsClearLoop
+
+    ld de, WHITE_KING_CASTLE
+    ld a, (currentIndex)
+    cp 1
+    jp z, .KC_isWhiteMove
+    ld e, BLACK_KING_CASTLE ;E vs DE - yay 1 byte optimization!
+.KC_isWhiteMove:
+
+    ;checks if squares in path are attacked.
+    call movegen_CanCastle
+    jp z, .skipKingSideCastle
+
+    ld a, (currentKing)
+    ld d, a
+    add 2
+    ld e, a
+    ld a, MOVE_FLAG_KINGSIDE_CASTLE
+
+    call movegen_AddMoveFlag
+
+.skipKingSideCastle:
+
+    ld a, (canQueenSideCastle)
+    cp 0
+    jp z, .skipQueenSideCastle
+
+    ld c, 1
+    ld hl, pieces
+    ld de, 0
+    ld a, (currentKing)
+    ld e, a
+    add hl, de
+    ld de, OFFSET_W
+.queenSideIsClearLoop:
+    add hl, de
+    ld a, (hl)
+    cp PIECE_NONE
+    ret nz ;jp nz, .skipQueenSideCastle
+
+    inc c
+    ld a, c
+    cp 4
+    jp nz, .queenSideIsClearLoop
+
+    ld de, WHITE_QUEEN_CASTLE
+    ld a, (currentIndex)
+    cp 1
+    jp z, .QC_isWhiteMove
+    ld e, BLACK_QUEEN_CASTLE
+.QC_isWhiteMove:
+
+    call movegen_CanCastle
+    ret z ;jp z, .skipQueenSideCastle
+
+    ld a, (currentKing)
+    ld d, a
+    add -2
+    ld e, a
+    ld a, MOVE_FLAG_QUEENSIDE_CASTLE
+
+    call movegen_AddMoveFlag
+
+.skipQueenSideCastle: ;unused
 
     ret
 
 ;expects position index in A, start direction in C and end direction in B.
+;preserves IX and HL
 movegen_GenerateSlidingPieceMoves:
+    push hl
+    push ix
+
+    ld ixl, a
+
+    ;load if piece is pinned.
+    ld hl, pinMap
+    ld de, 0
+    ld e, a
+    add hl, de
+    ld a, (hl)
+    ld ixh, a
+
+;return early if pinned and in check.
+    cp 0
+    jp z, .skipEarlyReturn
+    ld a, (inCheck)
+    cp 1
+    jp z, .return
+.skipEarlyReturn:
     
+    ;registers:
+    ;   B - target index
+    ;   C - squares counter
+    ;   DE - temp
+    ;   HL - temp
+    ;   IXH - isPinned
+    ;   IXL - start index
+    ;   IYH - offset
+    ;   IYL - squares to edge
+    ;
+    ;shadow registers:
+    ;   B - end direction
+    ;   C - direction index
+    ;   DE - 
+    ;   HL - 
+
+    push bc ;transfer BC to BC' and place an extra copy on the stack which is then used at the beginning of dirLoop
+    push bc
+    exx ;alt reg start
+    pop bc
+    exx ;alt reg end
+
+.dirLoop:
+    pop de ;get BC' (either extra value pushed above or from loop iteration logic)
+    ld d, 0
+    ld hl, LUT_DirOffset
+    add hl, de
+    ld a, (hl)
+    ld iyh, a
+
+    ;continue if Pinned and not MovingOnRay
+    ;note that I need to preserve the value of DE, but BC is unused.
+
+    ld a, ixh ;skip MovingOnRay check if not pinned
+    cp 0
+    jp z, .skipDirLoopContinueCase
+    ld b, ixl
+    ld c, iyh
+    call movegen_MovingOnRay
+    jp nz, .dirLoopContinue
+.skipDirLoopContinueCase:
+
+    ;get squares to edge
+    ld hl, $0800 ;load start index in HL
+    ld a, ixl
+    ld l, a
+
+    mlt hl ;(index*8 part of LUT_SquaresToEdge[index * 8 + dirIndex])
+
+    add hl, de ;add dirIndex loaded earlier
+    ld de, LUT_SquaresToEdge
+    add hl, de
+    ld a, (hl)
+    cp 0 ;if 0 squares to edge don't loop
+    jp z, .squareLoopBreak
+    ld iyl, a
+
+    ld b, ixl ;init target index
+    ld c, 0 ;init square-loop counter
+.squareLoop:
+    ld a, b ;update target index
+    add iyh
+    ld b, a
+
+    ld de, 0
+    ld e, b
+    ld hl, pieces
+    add hl, de
+    ld a, (hl) ;load targetPiece
+    ld e, a
+
+    ;break if capture && targetPieceColor == currentColor
+    cp PIECE_NONE
+    jp z, .skipEarlyBreak
+    and MASK_PIECE_COLOR
+    ld hl, currentColor
+    cp (hl)
+    jp nz, .skipEarlyBreak
+    jp .squareLoopBreak
+.skipEarlyBreak:
+
+    push de ;preserve targetPiece (in E)
+
+    ;add move if not InCheck || SquareChecked
+    ld a, (inCheck)
+    cp 0
+    jp z, .doAddMove
+    ld hl, checkMap
+    ld de, 0
+    ld e, b
+    add hl, de
+    ld a, (hl)
+    cp 1
+    jp nz, .skipAddMove
+.doAddMove:
+    ld e, b
+    ld d, ixl
+    call movegen_AddMove
+.skipAddMove:
+
+    pop de ;restore targetPiece
+    ld a, e
+    cp PIECE_NONE
+    jp z, .skipLateBreak
+    jp .squareLoopBreak
+.skipLateBreak:
+
+    inc c
+    ld a, c
+    cp iyl
+    jp nz, .squareLoop
+.squareLoopBreak:
+.dirLoopContinue:
+    exx ;alt reg start
+    inc c
+    push bc ;needed for start of loop
+    ld a, c
+    cp b
+    exx ;alt reg end
+    jp nz, .dirLoop
+
+    pop bc ;get rid of extra value added to stack above
+
+;assumes BC' isn't on stack
+.return:
+    pop ix
+    pop hl
     ret
 
 ;basically the same as enemy version, differences is using currentPlPtr,
-;and calling a different function in eah loop.
-; 
-;so I could probably combine the too if I wanted to save 100 bytes.
-;
+;and calling a different function in each loop.
 movegen_GenerateSlidingMoves:
     ld hl, (currentPlPtr)
     ld de, PIECE_QUEEN * 3
@@ -804,9 +1108,8 @@ movegen_GenerateSlidingMoves:
     ld b, 8 ;end at dir 8
     ld c, 0 ;start at dir 0
     ld a, (ix)
-    push hl
-    call movegen_GenerateSlidingMoves
-    pop hl
+
+    call movegen_GenerateSlidingPieceMoves
 
     inc ix
     inc h
@@ -829,9 +1132,8 @@ movegen_GenerateSlidingMoves:
     ld b, 4 ;end dir
     ld c, 0 ;start dir
     ld a, (ix)
-    push hl
-    call movegen_GenerateSlidingMoves
-    pop hl
+
+    call movegen_GenerateSlidingPieceMoves
 
     inc ix
     inc h
@@ -854,9 +1156,8 @@ movegen_GenerateSlidingMoves:
     ld b, 8 ;end dir
     ld c, 4 ;start dir
     ld a, (ix)
-    push hl
-    call movegen_GenerateSlidingMoves
-    pop hl
+
+    call movegen_GenerateSlidingPieceMoves
 
     inc ix
     inc h
@@ -867,10 +1168,480 @@ movegen_GenerateSlidingMoves:
     ret
 
 movegen_GenerateKnightMoves:
+    ld hl, (currentPlPtr) ;load piecelist
+    ld de, PIECE_KNIGHT * 3
+    add hl, de
+    ld ix, (hl)
+
+    ld b, (ix+PL_DATA_SIZE)
+    ld a, b
+    cp 0
+    ret z ;early return if 0 knights
+    
+    ld c, 0
+
+    ;registers:
+    ;   B - number of knights
+    ;   C - knight loop counter
+    ;   DE - temp
+    ;   HL - temp
+    ;   IX - piecelist ptr
+    ;   IY - movement ptr
+    ;shadow registers:
+    ;   B - number of possible moves from position
+    ;   C - move counter
+    ;   DE - target square
+    ;   HL - temp
+
+.knightLoop:
+    ld de, 0
+    ld e, (ix) ;knight position
+
+    ld hl, pinMap ;no possible moves if pinned
+    add hl, de
+    ld a, (hl)
+    cp 1
+    jp z, .knightLoopContinue
+
+    ld hl, LUT_KnightMoveCount
+    add hl, de
+    ld d, (hl) ;load number of possible moves
+    push de
+    exx ;alt reg start
+    pop bc
+    ld c, 0
+    ld de, 0
+    exx ;alt reg end
+
+    ld hl, $0800
+    ld l, e
+    ld a, e ;save knight start pos
+    mlt hl
+    ld de, LUT_KnightMovement
+    add hl, de
+    push hl
+    pop iy
+
+    ld e, a ;restore knight start pos
+
+    exx ;alt reg start
+.moveLoop:
+    ld e, (iy) ;target square. Note DE=0 initially.
+    inc iy
+
+    ld hl, pieces
+    add hl, de
+    ld a, (hl) ;target piece
+    
+;if not capture || targetPieceColor == enemyColor
+    cp PIECE_NONE
+    jp z, .skipIsEnemyCheck
+    and 1000b
+    ld hl, enemyColor
+    cp (hl)
+    jp nz, .moveLoopContinue
+.skipIsEnemyCheck:
+;if inCheck && !targetSquareChecked continue
+    ld a, (inCheck)
+    cp 0
+    jp z, .doAddMove
+
+    ld hl, checkMap
+    add hl, de
+    ld a, (hl)
+    cp 0
+    jp z, .moveLoopContinue
+.doAddMove:
+    exx ;alt reg end (D' <- E)
+    ld a, e
+    exx ;alt reg start
+    ld d, a
+    call movegen_AddMove
+    ld de, 0
+
+.moveLoopContinue:
+    inc c
+    ld a, c
+    cp b
+    jp nz, .moveLoop
+    
+    exx ;alt reg end
+
+.knightLoopContinue:
+    inc ix
+    inc c
+    ld a, c
+    cp b
+    jp nz, .knightLoop
 
     ret
 
+;preserves BC
+;expects upper bytes of DE to be 0
+movegen_PawnNonCaptureMoves:
+    ;can't move if piece in the way
+    ld a, b
+    add c
+    ld e, a
+    ld hl, pieces
+    add hl, de
+    ld a, (hl)
+    cp PIECE_NONE
+    ret nz
+
+;for moving a single square
+    ;incase pawn is pinned make sure it's moving along the pin line.
+    ld hl, pinMap
+    add hl, de
+    ld a, (hl)
+    cp 0
+    jp z, .skipPinCheck
+
+    push bc
+    ld b, e
+    call movegen_MovingOnRay
+    pop bc
+    
+    ret nz
+.skipPinCheck:
+
+    ld a, (inCheck)
+    cp 0
+    jp z, .skipInCheckCheck
+
+    ld hl, checkMap
+    add hl, de
+    ld a, (hl)
+    cp 1
+    jp z, .doubleAdvanceMoves
+.skipInCheckCheck:
+
+    ld d, b ;load move start square
+    ld a, ixh
+    cp 1
+    jp z, .isPromotion
+
+    call movegen_AddMove
+
+    jp .skipIsPromotion
+.isPromotion:
+    ld a, MOVE_FLAG_PROMOTE_QUEEN
+    call movegen_AddMoveFlag
+    ld a, MOVE_FLAG_PROMOTE_KNIGHT
+    call movegen_AddMoveFlag
+    ld a, MOVE_FLAG_PROMOTE_ROOK
+    call movegen_AddMoveFlag
+    ld a, MOVE_FLAG_PROMOTE_BISHOP
+    call movegen_AddMoveFlag
+
+.skipIsPromotion:
+    ld d, 0
+
+;move two squares (note the pin check applies)
+.doubleAdvanceMoves:
+
+    ;check if pawn is in it's starting square
+    ld a, (movegen_DoubleMoveRank)
+    cp iyh
+    ret nz
+
+    ld a, e ;calculate new target square
+    add c
+    ld e, a
+    ld hl, pieces
+    add hl, de
+    ld a, (hl)
+    cp PIECE_NONE
+    ret nz ;early return if target square isn't empty.
+
+    ld a, (inCheck)
+    cp 0
+    jp z, .skipInCheckCheck2
+
+    ld hl, checkMap
+    add hl, de
+    ld a, (hl)
+    cp 0
+    ret z ;early return if in check and checkmap square is 0
+
+.skipInCheckCheck2:
+
+    ld d, b
+    ld a, MOVE_FLAG_DOUBLE_PAWN
+    call movegen_AddMoveFlag
+
+    ret
+
+;expects start in B, destination in E
+;sets z flag if legal.
+;preserves BC, IX, IY, BC'
+movegen_IsEpLegal:
+    ;preserve registers
+    push bc
+    push ix
+    push iy
+
+    ;early return optimization: Check if king is on same horizontal line or on a diagonal line with the enemy pawn. If not a assumed sliding piece wouldn't have line of sight to it.
+
+    ;C = enemy pawn rank
+    ld a, (currentIndex) ;enemyPawnRank = white ? 4 : 3
+    add 3
+    ld c, a
+
+    ld hl, (currentPlPtr)
+    ld de, PIECE_KING * 3
+    add hl, de
+    ld hl, (hl)
+    ld a, (hl)
+
+    ;restore registers
+    pop iy
+    pop ix
+    pop bc
+    ret
+
+;expects pawn square in B and upper bytes of DE to be 0'd
+movegen_PawnCaptureMoves:
+    ;registers:
+    ;   DE / HL - temp
+    ;   IXL - depends
+    ;shadow registers:
+    ;   D - dirMin (loop counter)
+    ;   E - dirMax (loop limit)
+
+    exx ;alt reg start
+    ld de, $0002 ;start 0, end 2
+
+    ld a, iyl
+    cp 1
+    jp nc, .fileGT0
+    ld d, 1
+    jp .fileLT7
+.fileGT0:
+
+    cp 7
+    jp c, .fileLT7
+    ld e, 1
+.fileLT7:
+    exx ;alt reg end
+
+.dirLoop:
+    ld a, (currentIndex)
+    sla a
+    exx ;alt reg start
+    add d
+    exx ;alt reg end
+    ld e, a
+    ld hl, LUT_PawnDirColorToOffset
+    add hl, de
+    ld a, (hl)
+
+    ;registers:
+    ;   E - target square
+    ;   IXL - offset
+
+    ld ixl, a
+    add b
+    ld e, a
+
+    ;continue if pinned and not moving on pin ray.
+
+    ld hl, pinMap
+    add hl, de
+    ld a, (hl)
+    cp 0
+    jp z, .skipPinCheck
+    
+    push bc
+    ld b, e
+    ld c, ixl
+    call movegen_MovingOnRay
+    pop bc
+    
+    jp .dirLoopContinue
+.skipPinCheck:
+
+    ld hl, pieces ;check if enemy piece is on target square
+    add hl, de
+    ld a, (hl)
+    and MASK_PIECE_COLOR
+    ld hl, enemyColor
+    cp (hl)
+    jp nz, .skipRegularCapture
+
+    ld a, (inCheck)
+    cp 0
+    jp z, .skipInCheckCheck1
+
+    ld hl, checkMap
+    add hl, de
+    ld a, (hl)
+    cp 0
+    jp nz, .dirLoopContinue
+.skipInCheckCheck1:
+    ;regular capture (not en passant)
+
+    ld d, b ;load move start square
+    ld a, ixh
+    cp 1
+    jp z, .isPromotion
+
+    call movegen_AddMove
+
+    jp .skipIsPromotion
+.isPromotion:
+    ld a, MOVE_FLAG_PROMOTE_QUEEN
+    call movegen_AddMoveFlag
+    ld a, MOVE_FLAG_PROMOTE_KNIGHT
+    call movegen_AddMoveFlag
+    ld a, MOVE_FLAG_PROMOTE_ROOK
+    call movegen_AddMoveFlag
+    ld a, MOVE_FLAG_PROMOTE_BISHOP
+    call movegen_AddMoveFlag
+
+.skipIsPromotion:
+    ld d, 0
+
+.skipRegularCapture:
+    ;en passant capture
+    ld a, (epPossible)
+    cp 0
+    jp z, .dirLoopContinue
+
+    ld a, (movegen_EpSquare)
+    cp e ;target square
+    jp nz, .dirLoopContinue
+
+    ld a, (inCheck)
+    cp 0
+    jp z, .skipInCheckCheck2
+
+    ld hl, checkMap
+    add hl, de
+    ld a, (hl)
+    cp 0
+    jp z, .dirLoopContinue
+.skipInCheckCheck2:
+;edge case where a king could be exposed to attack by a sliding piece that was blocked by the pawn captured.
+    call movegen_IsEpLegal
+    jp nz, .dirLoopContinue
+
+    ;ep capture move
+    ld d, b
+    ld a, MOVE_FLAG_EN_PASSANT
+    call movegen_AddMoveFlag
+
+.dirLoopContinue:
+    exx ;alt reg start
+    inc d
+    ld a, d
+    cp e
+    exx ;alt reg end
+    jp nz, .dirLoop
+
+    ret
+
+;[currentIndex*2 + dirLoopIndex]
+LUT_PawnDirColorToOffset: db OFFSET_SW, OFFSET_SE, OFFSET_NW, OFFSET_NE
+
+movegen_DoubleMoveRank: db 0
+movegen_PromotionRank: db 0
+movegen_PawnFwdOffset: db 0
+movegen_EpSquare: db 0 ;RANK_FILE_TO_SQUARE(white ? 5 : 2, epFile)
+
 movegen_GeneratePawnMoves:
+    ld hl, (currentPlPtr)
+    ld de, PIECE_PAWN * 3
+    add hl, de
+    ld ix, (hl)
+
+    ld a, (ix+PL_DATA_SIZE)
+    cp 0
+    ret z ;early return if 0 pawns
+
+    exx ;alt reg start
+    ld b, a
+    ld c, 0
+    exx ;alt reg end
+
+    ld a, (currentIndex)
+    cp 0
+    jp z, .blackMove
+
+    ld a, 1
+    ld (movegen_DoubleMoveRank), a
+    ld a, 6
+    ld (movegen_PromotionRank), a
+    ld a, OFFSET_N
+    ld (movegen_PawnFwdOffset), a
+    ld a, (epFile)
+    add 5*8
+    ld (movegen_EpSquare), a
+
+    jp .skipBlackMove
+.blackMove:
+    ld a, 6
+    ld (movegen_DoubleMoveRank), a
+    ld a, 1
+    ld (movegen_PromotionRank), a
+    ld a, OFFSET_S
+    ld (movegen_PawnFwdOffset), a
+    ld a, (epFile)
+    add 2*8
+    ld (movegen_EpSquare), a
+.skipBlackMove:
+
+    ;registers:
+    ;   B - square
+    ;   C - offset
+    ;   DE - temp
+    ;   HL - temp
+    ;   IX - pawn data (outside main loop)
+    ;   IXH - isPromotionRank
+    ;   IXL - used by PawnCaptureMoves
+    ;   IYH - rank
+    ;   IYL - file
+    ;shadow registers:
+    ;   B - number of pawns
+    ;   C - pawn counter
+    ;   DE - ?
+    ;   HL - ?
+
+.pawnLoop:
+    ld b, (ix) ;pawn position
+    push ix
+
+    ld a, b ;calculate rank and file
+    and 111b
+    ld iyl, a
+    ld a, b
+    sra a
+    sra a
+    sra a
+    ld iyh, a
+
+    ld a, (movegen_PawnFwdOffset)
+    ld c, a
+
+    ld ixh, 1
+    ld a, (movegen_PromotionRank)
+    cp iyh
+    jp z, .isPromotion
+    ld ixh, 0
+.isPromotion:
+
+    call movegen_PawnNonCaptureMoves
+
+    call movegen_PawnCaptureMoves
+
+    pop ix
+    inc ix
+    exx ;alt reg start
+    inc c
+    ld a, c
+    cp b
+    exx ;alt reg end
+    jp nz, .pawnLoop
 
     ret
 
@@ -880,22 +1651,20 @@ movegen_Init:
 
     ld (ix-1), 0 ;reset move count
 
-    ld hl, inCheck
-    ld (hl), 0
-    ld hl, inDoubleCheck
-    ld (hl), 0
+    xor a
+    ld (inCheck), a
+    ld (inDoubleCheck), a
+    ld (epPossible), a
 
     ;en passant
-    ld hl, epPossible
-    ld (hl), 0
     ld a, (epFile)
     cp EP_NONE
     jp z, .epNotPossible
-
-    ld (hl), 1
+    ld a, 1
+    ld (epPossible), a
 .epNotPossible:
 
-    call BoardSetIndexVars ;currentColor/index, enemyColor/index
+    call board_SetIndexVars ;currentColor/index, enemyColor/index
 
     ;set Piece-list tables
     ld bc, plTableWhite
@@ -945,8 +1714,7 @@ movegen_Init:
     jp z, .noCurrentKing
 .hasCurrentKing:
     ld a, (iy)
-    ld hl, currentKing
-    ld (hl), a
+    ld (currentKing), a
     jp .skipNoCurrentKing
 .noCurrentKing:
     ld hl, currentKing
@@ -962,8 +1730,7 @@ movegen_Init:
     jp z, .noEnemyKing
 .hasEnemyKing:
     ld a, (iy)
-    ld hl, enemyKing
-    ld (hl), a
+    ld (enemyKing), a
     jp .skipNoEnemyKing
 .noEnemyKing:
     ld hl, enemyKing
@@ -996,5 +1763,21 @@ GenerateMoves:
     call movegen_GenerateSlidingMoves
     call movegen_GenerateKnightMoves
     call movegen_GeneratePawnMoves
+
+    pushall
+    ld ix, movesPtr
+    ld ix, (ix)
+
+    ld a, (ix-1) ;movecount
+    ld iy, varA
+    ld (iy), a
+
+    ; ld a, (ix+1) ;end 1
+    ; ld (varB), a
+    ; ld a, (ix+1+3) ;end 1
+    ; ld (varC), a
+    ; ld a, (ix+1+6) ;end 1
+    ; ld (varD), a
+    popall
 
     ret

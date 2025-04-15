@@ -238,6 +238,7 @@ DrawText:
 
     pop de
     pop hl
+;(don't use this)
 DrawTextSkipLoad:
 .drawTextLoop:
     push ix ;preserve str ptr

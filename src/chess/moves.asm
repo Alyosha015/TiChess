@@ -16,6 +16,8 @@
     MAX_MOVES := 218
     MOVES_STRUCT_SIZE := MAX_MOVES * 3 + 2
 
+    HEAP_START := ti.plotSScreen
+
 ;stores pointer to moves struct in IX, 0 if none if found
 ;note that the move count / data won't be 0'd.
 ;preserves registers
@@ -32,7 +34,7 @@ AllocMoves:
 ;   C  - counter
 ;   DE - constant offset for IX by struct size
 
-    ld ix, heap_start
+    ld ix, HEAP_START
     ld iy, heap_allocTable
 
     ld de, MOVES_STRUCT_SIZE
@@ -93,5 +95,4 @@ FreeMoves:
     HEAP_SIZE := 16384
     MAX_MOVES_STRUCTS := HEAP_SIZE / MOVES_STRUCT_SIZE
 
-heap_start: dl ti.plotSScreen
 heap_allocTable: rb MAX_MOVES_STRUCTS

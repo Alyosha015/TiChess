@@ -17,8 +17,8 @@
     PIECE_WHITE := 8
     PIECE_BLACK := 0
 
-    PIECE_MASK_TYPE := 0111b
-    PIECE_MASK_COLOR := 1000b
+    MASK_PIECE_TYPE := 0111b
+    MASK_PIECE_COLOR := 1000b
 
 PieceToAscii:
     db ".","kqrbnp",0,0,"KQRBNP"

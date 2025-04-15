@@ -11,7 +11,7 @@
 ;code
     include "main.asm"
 
-    ;chess core
+    ;chess engine core
     include "chess/piece.asm"
     include "chess/piecelist.asm"
     include "chess/board.asm"
@@ -19,16 +19,27 @@
     include "chess/moves.asm"
     include "chess/movegen.asm"
 
+    ;chess engine test
     include "chess/test/perft.asm"
 
-    include "graphics/ui/gameui.asm"
+    ;chess ai opponent
+    include "computer/computer.asm"
+    include "computer/eval.asm"
 
+    ;game logic
+    include "game/game.asm"
+    ;game graphics
+    include "game/ui/titleui.asm"
+    include "game/ui/gameui.asm"
+    include "game/ui/boardui.asm"
+
+    ;graphics subroutines
     include "graphics/lcd.asm"
     include "graphics/raster.asm"
     include "graphics/sprite.asm"
     include "graphics/text.asm"
 
-;data
+;ro-data
     include "data/font.asm"
     include "data/sprites.asm"
     include "data/chessLUTs.asm"

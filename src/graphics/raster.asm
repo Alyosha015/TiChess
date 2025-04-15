@@ -1,4 +1,5 @@
 ;expects X in BC, Y in L, Width in D, Height in E, Color in H
+;preserves IX
 FillRect:
     push hl
     push de

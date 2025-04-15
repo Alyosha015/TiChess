@@ -29,19 +29,16 @@ PieceListResetAll:
 
 
 ;expects pieceList in IX, square index to add in BC
+;doesn't preserve DE, IX, HL, BC. Expects DE upper 16 bits to be 0.
 PieceListAdd:
     ;data[count]=square
     ;lookup[square]=count
     ;count=count+1
 
-    ld de, 0
-
     ld e, (ix+PL_DATA_SIZE)    ;load count
     inc (ix+PL_DATA_SIZE)
 
-    push ix
-    pop hl
-    ;lea hl, ix
+    lea hl, ix
     add hl, de
     ld (hl), c              ;data[count]=square
 
@@ -52,13 +49,12 @@ PieceListAdd:
 
 
 ;expects pieceList in IX, square to remove in BC
+;doesnt preserve BC, DE, IX, IY, HL. Assumes DE upper 16 bits are 0
 PieceListRemove:
     ;moves last element in piecelist to removed piece's location
     ;index=lookup[square]
     ;data[index]=data[--count]
     ;lookup[data[index]]=index
-
-    ld de, 0
 
     dec (ix+PL_DATA_SIZE)
     ld e, (ix+PL_DATA_SIZE)    ;load count-1
@@ -82,7 +78,8 @@ PieceListRemove:
     ret
 
 
-;expects pieceList in IX, start in BC, end in DE
+;expects pieceList in IX, start in BC, end in DE.
+;doesn't preserve IY, IX, BC
 PieceListMove:
     ;index=lookup[start]
     ;data[index]=end
@@ -91,7 +88,7 @@ PieceListMove:
     lea iy, ix
 
     add ix, bc
-    ld bc, (ix+PL_DATA_SIZE+1) ;index=lookup[square]
+    ld c, (ix+PL_DATA_SIZE+1) ;index=lookup[square]
 
     lea hl, iy
     add hl, bc
