@@ -54,7 +54,6 @@ end macro
 
 macro ResetBpp
     SetBpp ti.lcdBpp16
-    call ti.ClrScrnFull
 end macro
 
 ;assumes x coordinate is stored in BC, y in DE, and stores result in HL.

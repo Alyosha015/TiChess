@@ -490,7 +490,7 @@ BoardLoad:
 
     ld a, EP_NONE
     ld (epFile), a
-    xor a, a
+    xor a
     ld (castleFlags), a
     ld (capturedPiece), a
     ld (board_StateSp), a
@@ -912,7 +912,7 @@ BoardPrint:
 ;********************************************************************************
 BoardPrintBlankLine: db "a b c d e f g h", 0
 BoardPrintPieceLine: db "8 . . . . . . . .", 0
-BoardPrintSideToMove: db "Move: !", 0
-BoardPrintEpFile: db "EP: !", 0
+BoardPrintSideToMove: db "Move: x", 0
+BoardPrintEpFile: db "EP: x", 0
 BoardPrintCastleLabel: db "Castle:", 0
-BoardPrintCastleFlags: db "!!!!", 0
+BoardPrintCastleFlags: db "xxxx", 0

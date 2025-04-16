@@ -2,6 +2,7 @@
 ;2x scale, doing it at runtime this way to keep the program size down.
 ;uses memory starting from ti.pixelShadow.
 ;doesn't preserve registers
+
 FontLoadLarge:
     ;IX - sprite source
     ;IY - destination
@@ -212,13 +213,8 @@ FONT2X_COPY_LUT:
 LargeTextRenderSize:
     call TextRenderSize
 
-    push hl
-    push bc
-    pop hl
-    add hl, hl
-    push hl
-    pop bc
-    pop hl
+    sla c ;multiply BC by 2
+    rl b
 
     ret
 

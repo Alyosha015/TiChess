@@ -1,7 +1,13 @@
 Main:
+    call ti.RunIndicOff
     di
 
+    pushall ;not sure why, but the program seems to crash sometimes without this?
+
     SetBpp ti.lcdBpp8
+
+    ld ix, 0x0D00000
+    set 0, (ix+ti.graphFlags) ;see moves.asm
 
     call LCD_Clear
 
@@ -10,10 +16,9 @@ Main:
 ;reset everything for OS
     ResetBpp
 
-    ld ix, 0x0D00000
-    set 0, (ix+ti.graphFlags) ;see moves.asm
+    popall
 
-    call ti.ClrLCDFull
+    call ti.ClrScrn
     call ti.HomeUp
     call ti.DrawStatusBar
 
@@ -26,14 +31,10 @@ App:
 .gameLoop:
     call GameTick
 
-    ei ;note: need to enable interrupts
-    call ti.os.GetCSC
-    di
-
-    cp ti.skEnter
-    jp nz, .enterKeyNotPressed
-    call Exit
-.enterKeyNotPressed:
+    call WaitForKey
+    ld a, (ti.kbdG6)
+    bit ti.kbitClear, a
+    call nz, Exit
 
     ld a, (main_run)
     cp 1
@@ -41,13 +42,24 @@ App:
 
     ret
 
-;call to fully stop the game on next tick.
+main_run: db 1
+;call to stop gameloop
 Exit:
     xor a
     ld (main_run), a
     ret
 
-main_run: db 1
+;waits until keypress is detected.
+WaitForKey:
+    ld hl, ti.DI_Mode
+    ld (hl), 2
+
+    xor a
+.wait:
+    cp (hl)
+    jp nz, .wait
+
+    ret
 
 StartPosFen:
     db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0
