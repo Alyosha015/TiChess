@@ -219,7 +219,7 @@ LargeTextRenderSize:
     ret
 
 ;get width of text string in pixels.
-;result stored in BC. Preserves all registers except BC.
+;result stored in BC. Preserves all registers except BC and A.
 TextRenderSize:
     push ix
     push de
@@ -246,6 +246,7 @@ TextRenderSize:
     ld hl, (hl) ;now has sprite data ptr
 
     ld a, (hl) ;add sprite width
+    inc a
 
     add c
     ld c, a
@@ -269,7 +270,7 @@ TextRenderSize:
 
     ret
 
-;expects x (0-319) in BC, y (0-239) in L, FG in D, BG in E, and string pointer in IX
+;expects x (0-319) in BC, y (0-239) in L, FG in D, BG in E, and string pointer in IX.
 DrawTextLarge:
     push hl
     push de
@@ -286,7 +287,7 @@ DrawTextLarge:
 
     jp DrawTextSkipLoad
 
-;expects x (0-319) in BC, y (0-239) in L, FG in D, BG in E, and string pointer in IX
+;expects x (0-319) in BC, y (0-239) in L, FG in D, BG in E, and string pointer in IX.
 DrawText:
     push hl
     push de

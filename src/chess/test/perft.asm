@@ -38,37 +38,37 @@ PerftTemp:
     ld ix, MovgenMapLabel
     call DrawText
 
-    ld de, 0
-    ld a, (varD)
-    ld e, a
-    push de
-    ld a, (varC)
-    ld e, a
-    push de
-    ld a, (varB)
-    ld e, a
-    push de
-    ld a, (varA)
-    ld e, a
-    push de
-    ld de, FormatInt
-    push de
-    ld de, ResultStr
-    push de
-    call ti.sprintf
-    pop de
-    pop de
-    pop de
-    pop de
-    pop de
-    pop de
+    ; ld de, 0
+    ; ld a, (varD)
+    ; ld e, a
+    ; push de
+    ; ld a, (varC)
+    ; ld e, a
+    ; push de
+    ; ld a, (varB)
+    ; ld e, a
+    ; push de
+    ; ld a, (varA)
+    ; ld e, a
+    ; push de
+    ; ld de, FormatInt
+    ; push de
+    ; ld de, ResultStr
+    ; push de
+    ; call ti.sprintf
+    ; pop de
+    ; pop de
+    ; pop de
+    ; pop de
+    ; pop de
+    ; pop de
 
-    ld bc, 1
-    ld l, 82
-    ld d, 2
-    ld e, 0
-    ld ix, ResultStr
-    call DrawTextLarge
+    ; ld bc, 1
+    ; ld l, 82
+    ; ld d, 2
+    ; ld e, 0
+    ; ld ix, ResultStr
+    ; call DrawTextLarge
 
     ret
 
@@ -81,6 +81,36 @@ varD: db 0
 
 FormatInt: db "%d %d %d %d",0
 ResultStr: rb 128
+
+Debug_PrintMoveGenMaps:
+    call BoardUi_DrawForce
+
+    ld hl, DBG_PB_YOFFSET
+    ld (hl), 5
+
+    ld hl, DBG_PB_XOFFSET
+    ld (hl), 0
+    ld iy, pinMap
+    call Debug_PrintBoard
+
+    ld hl, DBG_PB_XOFFSET
+    ld (hl), 8 * 9
+    ld iy, checkMap
+    call Debug_PrintBoard
+
+    ld hl, DBG_PB_XOFFSET
+    ld (hl), 16 * 9
+    ld iy, attackMap
+    call Debug_PrintBoard
+
+    ld bc, 1
+    ld l, 1
+    ld d, COLOR_WHITE
+    ld e, 0
+    ld ix, MovgenMapLabel
+    call DrawText
+
+    ret
 
 ;expects thing to print in iy
 Debug_PrintBoard:
@@ -123,7 +153,7 @@ Debug_PrintBoard:
 
     pop hl
 
-    ld d, 2
+    ld d, COLOR_WHITE
     ld e, 0
     call DrawText
     popall

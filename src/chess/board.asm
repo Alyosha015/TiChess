@@ -47,8 +47,8 @@ movingType: db 0
 capturedType: db 0
 
 ;not to be confused with movegenerator equivalents
-b_currentPlPtr: rb 3
-b_enemyPlPtr: rb 3
+b_currentPlPtr: dl 0
+b_enemyPlPtr: dl 0
 
 ;doesn't preserve BC, DE, HL, IX
 board_LoadPlPtrs:
@@ -74,25 +74,28 @@ board_MakeMove:
     ;   BC - temp
     ;   DE - temp
     ;   HL - temp
-    ;   IX - piecelists
+    ;   IX - piecelist (sometimes)
     ;   IYH - move start
     ;   IYL - move end
-
     ld (board_move), bc
-    ld bc, 0
-    ld de, 0
 
     call board_LoadPlPtrs
 
+    ld bc, 0
+    ld de, 0
+
     ld a, (b_move_s)
+    ld (LastMoveSource), a ;used for animation (boardui.asm)
     ld iyh, a
     ld a, (b_move_e)
+    ld (LastMoveDest), a ;used for animation
     ld iyl, a
 
     ld hl, pieces ;get moving piece type
     ld e, iyh
     add hl, de
     ld a, (hl)
+    ld (movingPiece), a
     and MASK_PIECE_TYPE
     ld (movingType), a
 
@@ -140,6 +143,9 @@ board_MakeMove:
     mlt de
     add hl, de
     ld ix, (hl)
+
+    ld c, iyl
+
     push iy
     call PieceListRemove
     pop iy
@@ -153,7 +159,7 @@ board_MakeMove:
 .skipRookCase:
 .skipRemoveCapturedPiece:
 
-    ;update position of moving piece
+;update position of moving piece
     ld hl, pieces ;pieces[end]=pieces[start]
     ld e, iyh
     add hl, de
@@ -167,7 +173,8 @@ board_MakeMove:
     ;now update piecelist
     ld hl, plTable
     ld de, $0300
-    ld e, iyh
+    ld a, (movingPiece)
+    ld e, a
     mlt de
     add hl, de
     ld ix, (hl)
@@ -212,42 +219,39 @@ board_MakeMove:
     jp nc, .skipPromotions ; >= comparison
     
     ;remove pawn from piecelist
-    ld hl, b_currentPlPtr
+    ld hl, (b_currentPlPtr)
     ld de, PIECE_PAWN*3
     add hl, de
     ld ix, (hl)
 
-    ld c, iyh
+    ld c, iyl
 
     push iy
     call PieceListRemove
     pop iy
-
-    ld hl, pieces ;remove from board
-    ld e, iyh
-    add hl, de
-    ld (hl), PIECE_NONE
 
     ;add new piece to respective piece list and to board array.
     ld a, (b_move_f) ;move flag + 1 == piece type of piece the pawn is promoting to.
     inc a
     ld de, $0300
     ld e, a
-    ld hl, (currentColor)
+    ld hl, currentColor
     add (hl) ;A now has the complete piece, and E only the type
 
     mlt de
-    ld hl, b_currentPlPtr
+    ld hl, (b_currentPlPtr)
     add hl, de
     ld ix, (hl)
 
-    ld e, iyl
+    ld c, iyl
     call PieceListAdd
 
     ld hl, pieces ;add new piece to board array
     ld e, iyl
     add hl, de
     ld (hl), a
+
+    jp .mf_Break
 .skipPromotions:
 
 ;handle special moves
@@ -265,11 +269,12 @@ board_MakeMove:
     ld a, iyh
     add 3 ;start+3 = rook
 
-    ld hl, b_currentPlPtr
+    ld hl, (b_currentPlPtr)
     ld de, PIECE_ROOK*3
     add hl, de
     ld ix, (hl)
 
+    ld bc, 0
     ld c, a ;rook
     sub 2
     ld e, a ;rook-2
@@ -287,18 +292,27 @@ board_MakeMove:
     ld (hl), PIECE_NONE
     ld hl, pieces
     add hl, bc
-    ld (bc), a
+    ld (hl), a
     
+    ;update screen
+    ld hl, RedrawFlags
+    add hl, de
+    ld (hl), 1
+    sbc hl, de
+    add hl, bc
+    ld (hl), 1
+
     jp .mf_Break
 .mf_QueensideCastle:
     ld a, iyh
     sub 4 ;start-4 = rook
 
-    ld hl, b_currentPlPtr
+    ld hl, (b_currentPlPtr)
     ld de, PIECE_ROOK*3
     add hl, de
     ld ix, (hl)
 
+    ld bc, 0
     ld c, a ;rook
     add 3
     ld e, a ;rook+3
@@ -316,7 +330,15 @@ board_MakeMove:
     ld (hl), PIECE_NONE
     ld hl, pieces
     add hl, bc
-    ld (bc), a
+    ld (hl), a
+
+    ;update screen
+    ld hl, RedrawFlags
+    add hl, de
+    ld (hl), 1
+    sbc hl, de
+    add hl, bc
+    ld (hl), 1
 
     jp .mf_Break
 .mf_EnPassant:
@@ -350,10 +372,10 @@ board_MakeMove:
 .mf_Break:
     ;swap side to move
     ld a, (whiteToMove)
-    ld b, a
-    ld a, 1
-    sub b
+    xor 1
     ld (whiteToMove), a
+
+    call board_SetIndexVars
 
     ret
 
@@ -416,6 +438,8 @@ board_UnmakeMove:
 
     ld a, (capturedPiece)
     and MASK_PIECE_TYPE
+
+    call board_SetIndexVars
 
     ret
 
@@ -752,6 +776,8 @@ BoardLoad:
     ld (hl), a
 .ep_file_parse_skip:
 ;parsing the halfmove and fullmove clocks will happen after, but I don't think I'll need them.
+
+    call board_SetIndexVars
 
     ret
 

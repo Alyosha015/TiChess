@@ -1,3 +1,4 @@
+;assembler config
     include "include/assembler/commands.alm"
     include "include/assembler/ez80.alm"
     include "include/assembler/tiformat.inc"
@@ -28,9 +29,10 @@
 
     ;game logic
     include "game/game.asm"
-    ;game graphics
+    include "game/matchTimer.asm"
+    include "game/ui/ui.asm" ;common things for ui code
     include "game/ui/titleui.asm"
-    include "game/ui/gameui.asm"
+    include "game/ui/gameui.asm" ;split game code into two files, boardui.asm is for rendering ONLY the chess board.
     include "game/ui/boardui.asm"
 
     ;graphics subroutines
@@ -38,6 +40,12 @@
     include "graphics/raster.asm"
     include "graphics/sprite.asm"
     include "graphics/text.asm"
+
+    ;misc other subroutines
+    include "util/math.asm"
+    include "util/timer.asm"
+    include "util/keyboard.asm"
+    ;include "util/file.asm"
 
 ;ro-data
     include "data/font.asm"

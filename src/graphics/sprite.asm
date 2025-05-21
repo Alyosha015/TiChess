@@ -3,7 +3,7 @@
 ; 1: Height
 ; 2: XOffset
 ; 3: YOffset
-; 4-6: XOffset * 320 + YOffset
+; 4-6: YOffset * 320 + XOffset
 ; 7-n: Image data, either 1bbp or 8bpp (type not stored).
 ;
 ;Types of sprites:
@@ -126,7 +126,27 @@ DrawSprite1bpp:
 
     ret
 
-DrawSprite8bpp:
-    CalcScreenIndex
+; ;expects X in BC, Y in L, FG in D, BG in E, and sprite pointer in IX.
+; ;if color is 0 it's drawn transparently.
+; DrawSprite8bpp:
+;     ld a, (ix+1) ;don't draw if height is 0
+;     cp 0
+;     ret z
 
-    ret
+;     ld de, 0
+;     ld e, l
+;     CalcScreenIndex ;expects x in BC and y in DE. Stores in HL.
+;     ld de, LCD_VRAM
+;     add hl, de
+;     ld de, (ix+4) ;add sprite position offset
+;     add hl, de
+;     push hl
+;     pop iy ;vram address
+    
+; .drawRow:
+
+;     exx ;alt reg start
+
+;     exx ;alt reg end
+
+;     ret

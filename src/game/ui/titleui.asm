@@ -1,0 +1,7 @@
+TitleUiInit:
+
+    ret
+
+TitleUiTick:
+
+    ret

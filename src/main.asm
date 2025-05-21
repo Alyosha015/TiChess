@@ -31,34 +31,17 @@ App:
 .gameLoop:
     call GameTick
 
-    call WaitForKey
-    ld a, (ti.kbdG6)
-    bit ti.kbitClear, a
-    call nz, Exit
-
-    ld a, (main_run)
+    ld a, (RunGame)
     cp 1
     jp z, .gameLoop
 
     ret
 
-main_run: db 1
+RunGame: db 1
 ;call to stop gameloop
 Exit:
     xor a
-    ld (main_run), a
-    ret
-
-;waits until keypress is detected.
-WaitForKey:
-    ld hl, ti.DI_Mode
-    ld (hl), 2
-
-    xor a
-.wait:
-    cp (hl)
-    jp nz, .wait
-
+    ld (RunGame), a
     ret
 
 StartPosFen:

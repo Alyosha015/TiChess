@@ -1,41 +1,72 @@
-;handle initilizing some things going to the correct ui screen's routines. GameTick is where all the game logic/rendering executes from.
-
-PaletteStart:
-    db 00000000b, 00000000b ;  0 - 0 0 0 (used as transparent color by some, so I need two blacks)
-    db 00000000b, 00000000b ;  1 - 0 0 0
-    db 11111111b, 11111111b ;  2 - 255 255 255
-    db 00011000b, 01100011b ;  3 - lightish gray
-    db 00000000b, 01111100b ;  4 - 255 0 0
-    db 11100000b, 00000011b ;  5 - 0 255 0
-    db 00011111b, 00000000b ;  6 - 0 0 255
-    db 11100000b, 01111111b ;  7 - 255 255 0
-    db 00011111b, 01111100b ;  8 - 255 0 255
-    db 11111111b, 00000011b ;  9 - 0 255 255
-    db $FE, $41             ; 10 - light blue purple / board white
-    db $F4, $20             ; 11 - dark blue purple / board black
-PaletteEnd:
+;handle initilizing some things going to the correct ui screen's routines.
+;GameTick is where all the game logic/rendering executes from.
 
 GameInit:
-;UI Init
-    ld hl, PaletteStart
-    ld bc, (PaletteEnd-PaletteStart)/2
-    call LCD_LoadPalette
-    call FontLoadLarge
+;Ui
+    call UiInit
 
-;Game Init
+;Logic
+    ;timer
+    call TimerDisable
+    call TimerReset
+    call TimerEnable
+
 ;(mainly temp testing stuff at the moment)
     ld hl, StartPosFen
     call BoardLoad
-    
-    call boardui_DrawForce
-    
+
+    call GameUiInit ;temp call
+
+    ret
+
+;handles exiting the program.
+GameExit:
+    call GameUiCleanup
+
+    call Exit
+
     ret
 
     GAME_UI_TITLE := 0
     GAME_UI_MAIN := 1
 
-game_ui_screen: db GAME_UI_MAIN
+game_state: db GAME_UI_MAIN
+
+game_CallTable:
 
 GameTick:
+    call GameUiTick ;temp call until I get the call table working
+
+    ; GetTime hl
+    ; ld d, 128
+    ; call Div24_8
+    ; push hl
+    ; ld de, printf_format
+    ; push de
+    ; ld de, printf_target
+    ; push de
+    ; call ti.sprintf
+    ; pop de
+    ; pop de
+    ; pop de
+
+    ; ld ix, printf_target
+    ; call LargeTextRenderSize
+
+    ; ld d, c
+    ; ld e, 20
+    ; ld bc, 239+2
+    ; ld l, 0
+    ; ld h, 1
+    ; call FillRect
+
+    ; ld bc, 239+2
+    ; ld l, 0
+    ; ld de, COLOR_WHITE * 256 + COLOR_BLACK
+    ; ld ix, printf_target
+    ; call DrawTextLarge
 
     ret
+
+printf_format: db "%03d %03d %03d %03d", 0
+printf_target: rb 16*4

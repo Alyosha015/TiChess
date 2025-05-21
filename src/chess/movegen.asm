@@ -36,9 +36,8 @@ enemyPlPtr: rb 3
 movegen_IncCheckCount:
     push hl
 
-    ld hl, inDoubleCheck
     ld a, (inCheck)
-    ld (hl), a
+    ld (inDoubleCheck), a
     ld hl, inCheck
     ld (hl), 1
 
@@ -126,6 +125,10 @@ movegen_GenerateEnemyPinsAndChecks:
     ld de, 0 ;init square counter and foundFriendlyPiece variable
     exx ;alt reg end
 
+    ld a, iyl ;skip loop if there are 0 squares in this direction
+    cp 0
+    jp z, .dirLoopContinue
+
     ;load start index (where the king is)
     ld hl, currentKing
     ld b, (hl)
@@ -191,7 +194,7 @@ movegen_GenerateEnemyPinsAndChecks:
     cp 1    ;check if friendly piece was found on this line before (meaning it's pinned),
             ;or not (meaning the attacking piece ic checking the king).
     jp z, .isFriendly
-
+.isNotFriendly:
 ; add to checkmap:
     ld a, iyh ;used by offset setup
 
@@ -272,7 +275,7 @@ movegen_GenerateEnemyPinsAndChecks:
     exx ;alt reg end
     jp nz, .squareLoop
 .squareLoopBreak:
-
+.dirLoopContinue:
 ;handle direction loop
     exx ;alt reg start
 .squareLoopBreakExx:
@@ -439,7 +442,8 @@ movegen_GenerateEnemyKnightAttackMap:
     cp e
     jp nz, .skipKingInCheck
 
-    ld de, 64 ;checkMap is the 64 bytes after the attackMap in ram
+    ld hl, checkMap
+    ld e, (ix)
     add hl, de
     ld (hl), 1
     call movegen_IncCheckCount
@@ -1226,7 +1230,7 @@ movegen_GenerateKnightMoves:
 
     exx ;alt reg start
 .moveLoop:
-    ld e, (iy) ;target square. Note DE=0 initially.
+    ld e, (iy) ;target square. Note assumes UD=0.
     inc iy
 
     ld hl, pieces
@@ -1236,7 +1240,7 @@ movegen_GenerateKnightMoves:
 ;if not capture || targetPieceColor == enemyColor
     cp PIECE_NONE
     jp z, .skipIsEnemyCheck
-    and 1000b
+    and MASK_PIECE_COLOR
     ld hl, enemyColor
     cp (hl)
     jp nz, .moveLoopContinue
@@ -1313,7 +1317,7 @@ movegen_PawnNonCaptureMoves:
     add hl, de
     ld a, (hl)
     cp 1
-    jp z, .doubleAdvanceMoves
+    jp nz, .doubleAdvanceMoves
 .skipInCheckCheck:
 
     ld d, b ;load move start square
@@ -1355,8 +1359,8 @@ movegen_PawnNonCaptureMoves:
     ret nz ;early return if target square isn't empty.
 
     ld a, (inCheck)
-    cp 0
-    jp z, .skipInCheckCheck2
+    cp 1
+    jp nz, .skipInCheckCheck2
 
     ld hl, checkMap
     add hl, de
@@ -1369,6 +1373,7 @@ movegen_PawnNonCaptureMoves:
     ld d, b
     ld a, MOVE_FLAG_DOUBLE_PAWN
     call movegen_AddMoveFlag
+    ld d, 0
 
     ret
 
@@ -1464,6 +1469,8 @@ movegen_PawnCaptureMoves:
     ld hl, pieces ;check if enemy piece is on target square
     add hl, de
     ld a, (hl)
+    cp PIECE_NONE
+    jp z, .skipRegularCapture
     and MASK_PIECE_COLOR
     ld hl, enemyColor
     cp (hl)
@@ -1476,7 +1483,7 @@ movegen_PawnCaptureMoves:
     ld hl, checkMap
     add hl, de
     ld a, (hl)
-    cp 0
+    cp 1
     jp nz, .dirLoopContinue
 .skipInCheckCheck1:
     ;regular capture (not en passant)
@@ -1763,21 +1770,5 @@ GenerateMoves:
     call movegen_GenerateSlidingMoves
     call movegen_GenerateKnightMoves
     call movegen_GeneratePawnMoves
-
-    pushall
-    ld ix, movesPtr
-    ld ix, (ix)
-
-    ld a, (ix-1) ;movecount
-    ld iy, varA
-    ld (iy), a
-
-    ; ld a, (ix+1) ;end 1
-    ; ld (varB), a
-    ; ld a, (ix+1+3) ;end 1
-    ; ld (varC), a
-    ; ld a, (ix+1+6) ;end 1
-    ; ld (varD), a
-    popall
 
     ret
