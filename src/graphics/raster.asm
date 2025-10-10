@@ -6,7 +6,7 @@ FillRect:
     ld de, 0
     ld e, l
     CalcScreenIndex
-    ld de, LCD_VRAM
+    ld de, (LCD_DrawBuffer)
     add hl, de ;vram index
     push hl
     pop iy
@@ -70,7 +70,7 @@ DrawRect:
     ld de, 0
     ld e, l
     CalcScreenIndex
-    ld de, LCD_VRAM
+    ld de, (LCD_DrawBuffer)
     add hl, de ;vram index
     push hl
     pop iy

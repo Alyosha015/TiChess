@@ -47,15 +47,6 @@ macro popall
     pop af
 end macro
 
-macro SetBpp bpp
-    ld a, bpp
-    ld (ti.mpLcdCtrl), a
-end macro
-
-macro ResetBpp
-    SetBpp ti.lcdBpp16
-end macro
-
 ;assumes x coordinate is stored in BC, y in DE, and stores result in HL.
 ;equivalent to HL = DE * 320 + BC
 macro CalcScreenIndex

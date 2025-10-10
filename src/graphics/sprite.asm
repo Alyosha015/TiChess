@@ -29,7 +29,7 @@ DrawSprite1bpp:
     ld de, 0
     ld e, l
     CalcScreenIndex ;expects x in BC and y in DE. Stores in HL.
-    ld de, LCD_VRAM
+    ld de, (LCD_DrawBuffer)
     add hl, de
     ld de, (ix+4) ;add sprite position offset
     add hl, de
@@ -136,7 +136,7 @@ DrawSprite1bpp:
 ;     ld de, 0
 ;     ld e, l
 ;     CalcScreenIndex ;expects x in BC and y in DE. Stores in HL.
-;     ld de, LCD_VRAM
+;     ld de, (LCD_DrawBuffer)
 ;     add hl, de
 ;     ld de, (ix+4) ;add sprite position offset
 ;     add hl, de

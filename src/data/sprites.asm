@@ -1,5 +1,5 @@
 SPRITE_PIECE_TABLE:
-    dl 0
+    dl 0 ;NOTE: 3 extra bytes needed here
     dl SPRITE_KING
     dl SPRITE_QUEEN
     dl SPRITE_ROOK

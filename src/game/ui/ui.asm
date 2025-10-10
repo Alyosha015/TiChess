@@ -85,6 +85,6 @@ UiInit:
     ld bc, (PaletteEnd-PaletteStart)/2
     call LCD_LoadPalette
 
-    call FontLoadLarge
+    ;call FontLoadLarge
 
     ret
