@@ -5,7 +5,7 @@ FillRect:
     push de
     ld de, 0
     ld e, l
-    CalcScreenIndex
+    GFX_ScreenIndex
     ld de, (LCD_DrawBuffer)
     add hl, de ;vram index
     push hl
@@ -69,7 +69,7 @@ DrawRect:
     push hl
     ld de, 0
     ld e, l
-    CalcScreenIndex
+    GFX_ScreenIndex
     ld de, (LCD_DrawBuffer)
     add hl, de ;vram index
     push hl

@@ -171,7 +171,7 @@ movegen_GenerateEnemyPinsAndChecks:
 ;if it's not a queen check rook/bishop
     exx ;alt reg start
 
-    bit 3, b
+    bit 2, b
     jp nz, .checkBishop
 .checkRook:
     cp PIECE_ROOK

@@ -72,7 +72,7 @@ FontLoadLarge_LdSprite:
     sla e
     ld (iy+3), e
 
-    CalcScreenIndex
+    GFX_ScreenIndex
 
     ld (iy+4), hl
 

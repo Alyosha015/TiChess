@@ -1,7 +1,0 @@
-TitleUiInit:
-
-    ret
-
-TitleUiTick:
-
-    ret

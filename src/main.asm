@@ -12,10 +12,10 @@ Main:
     call LCD_Clear
 
 ; * * * *
-    call App
+    call Program
 ; * * * *
 
-;reset everything
+    ;stop
     ResetBpp
 
     call LCD_DisableDoubleBuffering
@@ -32,64 +32,17 @@ Main:
     ei
     ret
 
-App:
-    ;call GameInit
+Program:
+    call GameInit
 
-    call UiInit
-
-    call LCD_Clear
-    ld bc, 0
-    ld l, 0
-    ld de, $001010
-    ld h, COLOR_WHITE
-    call DrawRect
-
-    call LCD_Swap
-    call LCD_Clear
-    ld bc, $10
-    ld l, 0
-    ld de, $001010
-    ld h, COLOR_WHITE
-    call DrawRect
-
-.gameLoop:
-    ;call GameTick
-
-    xor a
-    ld (tempY), a
-.textLoop:
-    ld bc, 0
-    ld a, (tempY)
-    ld l, a
-
-    ld de, (tempColor)
-    inc de
-    ld (tempColor), de
-    ld ix, tempStr
-    call DrawText
-
-    ld a, (tempY)
-    add 8
-    ld (tempY), a
-    cp 240
-    jp nz, .textLoop
-
-    call LCD_Swap
-
-    ld a, (ti.kbdG6)
-    bit ti.kbitClear, a
-    call nz, Exit
+.mainLoop:
+    call GameTick
 
     ld a, (RunGame)
     cp 1
-    jp z, .gameLoop
+    jp z, .mainLoop
 
     ret
-
-tempY: db 0
-tempColor: dl 0
-
-tempStr: db "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTt", 0
 
 RunGame: db 1
 ;call to stop gameloop

@@ -82,8 +82,10 @@ PaletteEnd:
 
 UiInit:
     ld hl, PaletteStart
-    ld bc, (PaletteEnd-PaletteStart)/2
-    call LCD_LoadPalette
+    ld de, LCD_PALETTE
+    ld bc, PaletteEnd-PaletteStart
+    
+    ldir
 
     ;call FontLoadLarge
 

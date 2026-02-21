@@ -9,33 +9,12 @@
 
     format ti executable "TICHESS"
 
-;code
+;program
     include "main.asm"
 
-    ; ;chess engine core
-    ; include "chess/piece.asm"
-    ; include "chess/piecelist.asm"
-    ; include "chess/board.asm"
-    ; include "chess/move.asm"
-    ; include "chess/moves.asm"
-    ; include "chess/movegen.asm"
+    include "game/game.asm"
 
-    ; ;chess engine test
-    ; include "chess/test/perft.asm"
-
-    ; ;chess ai opponent
-    ; include "computer/computer.asm"
-    ; include "computer/eval.asm"
-
-    ; ;game logic
-    ; include "game/game.asm"
-    ; include "game/matchTimer.asm"
-    include "game/ui/ui.asm" ;common things for ui code
-    ; include "game/ui/titleui.asm"
-    ; include "game/ui/gameui.asm" ;split game code into two files, boardui.asm is for rendering ONLY the chess board.
-    ; include "game/ui/boardui.asm"
-
-    ;graphics subroutines
+    include "graphics/color.asm"
     include "graphics/lcd.asm"
     include "graphics/raster.asm"
     include "graphics/sprite.asm"
@@ -47,10 +26,10 @@
     include "util/keyboard.asm"
     ;include "util/file.asm"
 
-; ;rom-data
+;rom-data
     include "data/font.asm"
-;     include "data/sprites.asm"
-;     include "data/chessLUTs.asm"
+    include "data/sprites.asm"
+    include "data/chessLUTs.asm"
 
     ; ;debugging
     ; include "debug/console.asm"

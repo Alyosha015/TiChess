@@ -15,7 +15,7 @@
     ;LCD_PORTS := $E30000
     LCD_DMA := $E30010 ;stores vram start address for lcd controller
     LCD_CTRL := $E30018 ;color palettes etc
-    LCD_RIS := $E300020 ;raw input status register
+    LCD_RIS := $E30020 ;raw input status register
     LCD_ICR := $E30028 ;interrupt control register
     LCD_PALETTE := $E30200 ;color palette for indexed rendering
 
@@ -28,6 +28,22 @@
     ;resets to default 16 bit color mode
     macro ResetBpp
         SetBpp ti.lcdBpp16
+    end macro
+
+    ;assumes x coordinate is stored in BC, y in DE, and stores result in HL.
+    ;calculates HL = DE * 320 + BC
+    macro GFX_ScreenIndex
+        ld hl, 64 * 256 ;ld h, 64
+        ld l, e
+
+        mlt hl      ;HL = [DE * 64]
+
+        add hl, bc  ;hl = de * 64 + [BC]
+
+        ld d, e     ;DE *= 256
+        ld e, 0
+
+        add hl, de  ;hl = de * 64 + [DE * 256] + bc
     end macro
 
 ;Contains start address of buffer you should draw to.
@@ -57,8 +73,7 @@ LCD_DisableDoubleBuffering:
     ld l, LCD_ICR and $FF
     ld (hl), 0
 
-    ld hl, LCD_DrawBuffer
-    ld (hl), de
+    ld (LCD_DrawBuffer), de ;LCD_BUFFER_0
 
     ret
 
@@ -115,12 +130,12 @@ LCD_ClearColor:
 
 
 ;Expects pointer to palette in HL, number of colors in BC.
-LCD_LoadPalette:
-    sla c ;multiply BC by 2 since colors are 2 bytes each.
-    rl b
-
-    ld de, LCD_PALETTE
-
-    ldir
-
-    ret
+;LCD_LoadPalette:
+;    sla c ;multiply BC by 2 since colors are 2 bytes each.
+;    rl b
+;
+;    ld de, LCD_PALETTE
+;
+;    ldir
+;
+;    ret

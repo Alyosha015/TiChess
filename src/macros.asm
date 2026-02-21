@@ -47,22 +47,6 @@ macro popall
     pop af
 end macro
 
-;assumes x coordinate is stored in BC, y in DE, and stores result in HL.
-;equivalent to HL = DE * 320 + BC
-macro CalcScreenIndex
-    ld hl, 0
-    ld h, 64
-    ld l, e
-
-    mlt hl
-
-    add hl, bc
-
-    ld d, e
-    ld e, 0
-    add hl, de
-end macro
-
 ;convert a RGB555 color into a two byte DB command
 macro COLOR555 red, green, blue
     ;gggbbbbb 0rrrrrgg
