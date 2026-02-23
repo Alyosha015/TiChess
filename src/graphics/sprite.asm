@@ -11,30 +11,39 @@
 ; 1. 1 bpp - mainly text. Only has a fg and bg color.
 ; 2. 8 bpp - fastest to draw, essentially a memory copy.
 
-;expects X in BC, Y in DE, FG in H, BG in L, and sprite pointer in IX.
-;if one of the colors is 0 it's drawn transparently.
-;LD DE, COLOR_FG * 256 + COLOR_BG
-;no registers are preserved.
+;************************************************
+; GFX_Sprite1Bpp - Draw sprite in 1bbp format.
+;
+; INPUTS:
+;   IY  = Sprite Data Pointer
+;   BC  = X coordinate
+;   DE  = Y coordinate
+;   H   = Foreground Color
+;   L   = Background Color
+;
+; PRESERVES:
+;   HL'
+;
+;************************************************
 GFX_Sprite1Bpp:
     ;register data:
     ;   IX - sprite data
     ;   IY - vram pointer
-    ;   B - number of col (sprite width)
-    ;   C - col counter (counts to 0, unlike row counter)
+    ;   B - number of columns (sprite width)
+    ;   C - column counter (counts to 0)
     ;   D - FG Color
     ;   E - BG Color
     ;   H - number of bits to draw (1-8)
     ;   L - byte to draw
     ;
     ;shadow registers:
-    ;   B - number of rows (sprite height)
-    ;   C - row counter (from 0)
+    ;   B - 
+    ;   C - row counter (sprite height, counts to 0)
     ;   DE - constant [320-WIDTH] (used to move vram pointer to next row)
-    ;   H - n/a
-    ;   L - n/a
+    ;   HL - 
 
     ld a, (ix+1) ;early return if 0 height (such as the space character)
-    cp 0
+    or a
     ret z
 
     push hl ;preserve color
@@ -49,15 +58,14 @@ GFX_Sprite1Bpp:
     pop iy
 
     exx ;alt reg start
-    ld bc, 0 ;calculate DE = 320 - (IX), where (IX) is sprite width.
+    ld bc, 0        ;calculate DE = 320 - (IX), where (IX) is sprite width.
     ld c, (ix)
     xor a
     ld hl, 320
     sbc hl, bc
     ex de, hl
 
-    ld b, (ix+1) ;load number of rows / init row counter
-    ld c, 0
+    ld c, (ix+1)    ;load number of rows
     exx ;alt reg end
 
     ld b, (ix) ;load sprite width
@@ -80,7 +88,7 @@ GFX_Sprite1Bpp:
 
     ld a, c
     cp 8
-    jp nc, .skipPartialByte ;not less than
+    jr nc, .skipPartialByte ;not less than
     ld h, c ;set bits to draw to smaller number.
 .skipPartialByte:
     ld a, c ;update pixels left to draw counter
@@ -89,39 +97,37 @@ GFX_Sprite1Bpp:
 
 .drawBit:
     bit 7, l ;left-most bit. z set to 1 if 0
-    jp z, .setBg
+    jr z, .setBg
 .setFg:
     ld a, d ;fg color
-    jp .finishSetColor
+    jr .finishSetColor
 .setBg:
     ld a, e ;bg color
 .finishSetColor:
-    cp 0    ;color 0 is considered transparent
-    jp z, .skipDrawPixel
+    or a    ;color 0 is considered transparent
+    jr z, .skipDrawPixel
 
     ld (iy), a
 .skipDrawPixel:
     inc iy
 
-    sla l ;shift data to draw byte to next pixel is in the upper bit.
+    sla l ;shift next bit to draw into 7th bit.
 
     dec h
     ld a, h
-    cp 0
-    jp nz, .drawBit
+    or a
+    jr nz, .drawBit
 
     ld a, c
-    cp 0
-    jp nz, .drawCol
+    or a
+    jr nz, .drawCol
 
     exx ;alt reg start
     add iy, de ;move vram pointer to first byte of next row
 
-    inc c
-    ld a, c
-    cp b
+    dec c
     exx ;alt reg end
-    jp nz, .drawRow
+    jr nz, .drawRow
 
     ret
 

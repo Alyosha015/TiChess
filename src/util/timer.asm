@@ -29,11 +29,9 @@ TimerReset:
     ld (TIMER_COUNTER+1), hl
     ret
 
-;gets upper 3 bytes of timer and loads into HL.
+;gets upper 3 bytes of timer and loads into 24 bit register.
 ;note that this means its counting at 128 hz instead of 32768 hz.
-macro GetTime rr_
-    ld rr_, (TIMER_COUNTER+1)
-end macro
-; GetTime:
-;     ld hl, (TIMER_COUNTER+1)
-;     ret
+    macro GetTime rr_
+        ld rr_, (TIMER_COUNTER+1)
+    end macro
+

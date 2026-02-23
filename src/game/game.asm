@@ -11,7 +11,7 @@ TEST_SPRITE:
 
 GameInit:
 ;Ui
-    call UiInit
+    call Color_Init
 
 ;Logic
     ;timer
@@ -21,14 +21,25 @@ GameInit:
 
 ;scratchpad
 
-    ld ix, SPRITE_QUEEN
+    ld ix, SPRITE_KING
     ld bc, 0
     ld de, 0
-    ld hl, COLOR_RED * 256 + COLOR_GREEN
+    ld hl, COLOR_BOARD_PIECE_WHITE * 256 + COLOR_TRANSPARENT
     call GFX_Sprite1Bpp
 
-    call LCD_Swap
+    ld bc, 100
+    ld de, 10
+    ld hl, 20 * 256 + 10
+    ld a, COLOR_BLUE
+    call GFX_FillRectangle
 
+    ld bc, 0
+    ld de, 0
+    ld hl, 5 * 256 + 5
+    ld a, COLOR_YELLOW
+    call GFX_DrawRectangle
+
+    call LCD_Swap
 
     ret
 

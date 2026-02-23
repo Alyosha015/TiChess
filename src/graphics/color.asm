@@ -1,11 +1,15 @@
-;Goal here is to have every page of the Ui be self-contained,
-;and have game.asm be a glorified switch statement for running 
-;the right one.
-;
-;General structure:
-;
-;xxxUiInit: - call to reset ui state to default.
-;xxxUiTick: - used for logic and ui drawing. Runs as fast as possible.
+;stores color definitions for the game.
+
+;convert a RGB555 color into a two byte DB command
+    macro COLOR555 red, green, blue
+        ;gggbbbbb 0rrrrrgg
+        db (((green) shl 5) and 11100000b) + ((blue) and 00011111b), (((red) shl 2) and 01111100b) + (((green) shr 3) and 11b)
+    end macro
+
+;convert a RGB888 into a two byte RGB555 color as a DB command
+    macro COLOR888 r, g, b
+        COLOR555 ((r)/8), ((g)/8), ((b)/8)
+    end macro
 
 ;color palette
 ; 00-0F - Normal Colors
@@ -80,7 +84,7 @@ PaletteStart:
     COLOR555 20, 20, 20 ;1F - sidebar text inactive
 PaletteEnd:
 
-UiInit:
+Color_Init:
     ld hl, PaletteStart
     ld de, LCD_PALETTE
     ld bc, PaletteEnd-PaletteStart

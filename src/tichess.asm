@@ -5,11 +5,11 @@
 
     include "include/ti84pceg.inc"
 
-    include "macros.asm"
-
     format ti executable "TICHESS"
 
 ;program
+    include "macros.asm"
+
     include "main.asm"
 
     include "game/game.asm"

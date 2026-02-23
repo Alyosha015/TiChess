@@ -1,120 +1,167 @@
-;expects X in BC, Y in L, Width in D, Height in E, Color in H
-;preserves IX
-FillRect:
-    push hl
-    push de
-    ld de, 0
-    ld e, l
-    GFX_ScreenIndex
-    ld de, (LCD_DrawBuffer)
-    add hl, de ;vram index
+;************************************************
+; GFX_FillRectangle - Draw filled rectangle.
+;   DON'T use with 0 for width / height.
+;
+; INPUTS:
+;   BC  = X coordinate
+;   DE  = Y coordinate
+;   H   = Width
+;   L   = Height
+;   A   = Color
+;
+; PRESERVES:
+;   A, B', HL'
+;
+;************************************************
+GFX_FillRectangle:
+    ;register data:
+    ;   IXH - [width - 1]
+    ;   IXL - n/a
+    ;   IY - vram pointer
+    ;   A - color
+    ;   BC - used for ldir
+    ;   DE - used for ldir
+    ;   HL - used for ldir
+    ;
+    ;shadow registers:
+    ;   B - never modified
+    ;   C - row counter (rect height, counts to 0)
+    ;   DE - const 320 for shifting vram pointer to next line.
+    ;   HL - never modified
+
+    push hl ;store width/height in IX so shadow registers can access it.
+    pop ix
+
+    exx ;alt reg start
+    ld de, 320
+    ld c, ixl   ;load number of rows to counter
+    exx ;alt reg end
+
+    GFX_ScreenIndex ;HL = 320 * DE + BC
+    ld de, (LCD_DrawBuffer) ;add vram start offset
+    add hl, de
     push hl
     pop iy
 
-    pop de
-    ld bc, 320
-    ld a, c
-    sub d
-    ld c, a
-    ld a, b
-    sbc 0
-    ld b, a
-    push bc
-    exx ;alt reg start
-    pop de
-    exx ;alt reg end
+    dec ixh ;since the first byte is set manually,
+            ;the number of bytes to load for LDIR is one less
+            ;and this is adjusted here.
+    jr z, .drawRowSingleWidth
 
-    pop hl
-
-;registers:
-;   IY - VRAM
-;   D - width
-;   E - height
-;   B - x counter
-;   C - y counter
-;   H - color
-;   L - none
-;alt registers:
-;   DE - IY offset for next row (320-width)
-    ld c, 0
 .drawRow:
-    ld b, 0
-.drawPixel:
-    ld (iy), h
-    inc iy
+    push iy
+    pop hl
+    push iy
+    pop de
 
-    inc b
-    ld a, b
-    cp d
-    jp nz, .drawPixel
+    inc de
+    ld bc, 0
+    ld c, ixh
+    ld (hl), a
 
-    exx ;alt reg begin
-    add iy, de
+    ldir
+
+    exx ;alt reg start
+    add iy, de  ;move vram pointer to first byte of next row
+    dec c
     exx ;alt reg end
-
-    inc c
-    ld a, c
-    cp e
-    jp nz, .drawRow
+    jr nz, .drawRow
 
     ret
 
-;draws rectangle with thickness of 1 pixel.
-;expects X in BC, Y in L, Width in D, Height in E, Color in H.
-;preserves nothing (except shadow registers).
-DrawRect:
-    dec d
-    dec e
-    push de
+;special case where LDIR isn't needed.
+.drawRowSingleWidth:
+    ld (iy), a
+
+    exx ;alt reg start
+    add iy, de ;move vram pointer to first byte of next row
+    dec c
+    exx ;alt reg end
+    jr nz, .drawRowSingleWidth
+
+    ret
+
+;************************************************
+; GFX_DrawRectangle - Draw rectangle with 1 pixel
+;   border
+;
+; INPUTS:
+;   BC  = X coordinate
+;   DE  = Y coordinate
+;   H   = Width
+;   L   = Height
+;   A   = Color
+;
+; PRESERVES:
+;
+;
+;************************************************
+GFX_DrawRectangle:
+    ;register data:
+    ;   IXH - [width - 1]
+    ;   IXL - n/a
+    ;   IY - temp
+    ;   A - color
+    ;   BC - used for ldir
+    ;   DE - used for ldir
+    ;   HL - used for ldir
+
+    push hl ;move width/height to ix
+    pop ix
+
+    dec ixh
+
+    GFX_ScreenIndex ;HL = 320 * DE + BC
+    ld de, (LCD_DrawBuffer) ;add vram start offset
+    add hl, de
+
+    push hl ;save vram start
+
+;draw top row
     push hl
-    ld de, 0
-    ld e, l
-    GFX_ScreenIndex
-    ld de, (LCD_DrawBuffer)
-    add hl, de ;vram index
-    push hl
+    pop de
+    inc de
+    ld bc, 0
+    ld c, ixh
+    ld (hl), a
+
+    ldir
+
+;draw columns
+    pop hl  ;restore vram start (start of left column)
+            ;note that de has the start of the right column
+            ;after the ldir instruction
+
+    dec de  ;move column start left 1 pixel
+            ;(accounts for LDIR incrementing DE/HL an extra time)
+
+    push de ;move right column vram location to iy
     pop iy
 
-    pop hl
-    pop de
-
-    push iy ;preserve IY
-
-    ld bc, 0
-    ld c, d
-    lea ix, iy
-    add ix, bc
     ld bc, 320
-    ld l, 0
-    dec e
-.colLoop:
+.columnLoop:
+    ld (hl), a  ;left
+    ld (iy), a  ;right
+
+    add hl, bc
     add iy, bc
-    add ix, bc
 
-    ld (iy), h
-    ld (ix), h
+    dec ixl
+    jr nz, .columnLoop
 
-    inc l
-    ld a, l
-    cp e
-    jp nz, .colLoop
+;note that hl now has the pointer to the bottom of the left column
+;which can be used to start drawing the bottom row.
 
-    add iy, bc
-    pop ix ;restore IY (into IX)
-    ld l, 0
-.rowLoop:
-    ld (iy), h
-    ld (ix), h
+    or a ;clear carry flag just in case while preserving A's value
+    sbc hl, bc ;move pointer up 1 pixel
 
-    inc iy
-    inc ix
+    push hl
+    pop de
+    inc de
+    ld bc, 0
+    ld c, ixh
+    ld (hl), a
 
-    inc l
-    ld a, l
-    cp d
-    jp nz, .rowLoop
-
-    ld (iy), h
-    ld (ix), h
+    ldir
 
     ret

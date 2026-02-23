@@ -1,0 +1,6 @@
+List of common instruction on the left with faster equivalent used in code on the right
+
+LD a, 0             XOR a
+CP 0                OR a
+CP 1                DEC a
+CP 255              INC a
