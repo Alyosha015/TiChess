@@ -93,7 +93,7 @@ GFX_FillRectangle:
 ;   A   = Color
 ;
 ; PRESERVES:
-;
+;   A, Shadow Registers
 ;
 ;************************************************
 GFX_DrawRectangle:

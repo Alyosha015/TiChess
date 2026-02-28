@@ -84,7 +84,7 @@ PaletteStart:
     COLOR555 20, 20, 20 ;1F - sidebar text inactive
 PaletteEnd:
 
-Color_Init:
+GFX_ColorInit:
     ld hl, PaletteStart
     ld de, LCD_PALETTE
     ld bc, PaletteEnd-PaletteStart

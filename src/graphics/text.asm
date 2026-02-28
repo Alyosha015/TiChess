@@ -356,3 +356,77 @@ DrawTextSkipLoad:
 
 selected_font_table: rb 3
 selected_font_spacing: db 0
+
+GFX_FONT_TABLE: rb 3
+GFX_FONT_SPACING: db 0
+
+;************************************************
+; GFX_DrawText - Draws text at XY coordinates.
+;
+; INPUTS:
+;   IX  = String Pointer (null terminated)
+;   BC  = X coordinate
+;   DE  = Y coordinate
+;   H   = Foreground Color
+;   L   = Background Color
+;
+; PRESERVES:
+;   NONE
+;
+;************************************************
+GFX_DrawText:
+    ld hl, FONT_TABLE
+    ld (GFX_FONT_TABLE), hl    
+    
+    ;register data:
+    ;   IX - string pointer
+    ;   IY - font char sprite pointer
+    ;   
+    ;
+    ;shadow registers:
+    ;
+    ;
+    ;
+    ;
+
+    push hl ;preserve color
+
+    GFX_ScreenIndex ;HL = 320 * DE + BC
+    ld de, (LCD_DrawBuffer) ;add vram start offset
+    add hl, de
+    push hl
+    pop iy ;vram location to IY
+
+.drawTextLoop:
+    ld a, (ix)
+    inc ix
+
+    or a
+    jr .nullCharacter
+
+    sub 32  ;a = (a - 32) * 3
+    ld h, a
+    add a
+    add h
+
+    ld hl, (GFX_FONT_TABLE)
+
+    ld de, 0
+    ld e, a
+    add hl, de
+
+    ld iy, (hl)
+
+    pop hl ;save and preserve color again
+    push hl
+
+    push ix ;preserve string pointer
+    call GFX_Sprite1BppFast
+    pop ix ;restore string pointer
+
+    jr .drawTextLoop
+
+.nullCharacter:
+    pop hl ;get color off the stack
+
+    ret

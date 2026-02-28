@@ -11,7 +11,7 @@ TEST_SPRITE:
 
 GameInit:
 ;Ui
-    call Color_Init
+    call GFX_ColorInit
 
 ;Logic
     ;timer
@@ -38,6 +38,9 @@ GameInit:
     ld hl, 5 * 256 + 5
     ld a, COLOR_YELLOW
     call GFX_DrawRectangle
+
+
+    ;call GFX_DrawText
 
     call LCD_Swap
 

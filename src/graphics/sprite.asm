@@ -12,6 +12,29 @@
 ; 2. 8 bpp - fastest to draw, essentially a memory copy.
 
 ;************************************************
+; GFX_Sprite1BppFast - GFX_Sprite1Bpp but without XY coordinate -> VRAM calculation.
+;
+; INPUTS:
+;   IY  = Sprite Data Pointer
+;   BC  = n/a
+;   D   = Foreground Color
+;   E   = Background Color
+;   HL  = VRAM Offset (320 * x + y)
+;
+; PRESERVES:
+;   NONE
+;
+;************************************************
+GFX_Sprite1BppFast:
+    ld a, (ix+1) ;early return if 0 height (such as the space character)
+    or a
+    ret z
+
+    push hl ;preserve color
+
+    jr __GFX_Sprite1Bpp_PostScreenIndexCalc
+
+;************************************************
 ; GFX_Sprite1Bpp - Draw sprite in 1bbp format.
 ;
 ; INPUTS:
@@ -22,7 +45,7 @@
 ;   L   = Background Color
 ;
 ; PRESERVES:
-;   HL'
+;   NONE
 ;
 ;************************************************
 GFX_Sprite1Bpp:
@@ -37,10 +60,10 @@ GFX_Sprite1Bpp:
     ;   L - byte to draw
     ;
     ;shadow registers:
-    ;   B - 
+    ;   B - temp
     ;   C - row counter (sprite height, counts to 0)
     ;   DE - constant [320-WIDTH] (used to move vram pointer to next row)
-    ;   HL - 
+    ;   HL - temp
 
     ld a, (ix+1) ;early return if 0 height (such as the space character)
     or a
@@ -49,6 +72,7 @@ GFX_Sprite1Bpp:
     push hl ;preserve color
 
     GFX_ScreenIndex ;HL = 320 * DE + BC
+__GFX_Sprite1Bpp_PostScreenIndexCalc:
     ld de, (ix+4) ;add sprite offset
     add hl, de
     ld de, (LCD_DrawBuffer) ;add vram start offset
