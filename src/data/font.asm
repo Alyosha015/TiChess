@@ -1,8 +1,7 @@
 ;Note: about 2 KB of compiled data
 ;see src\graphics\sprite.asm for format
 
-FONT_LARGE_TABLE:
-    rb 3 * 95
+FONT_TABLE_LARGE := MEM_FONT_TABLE_LARGE
 
 FONT_TABLE:
     dl FONT_CHAR_32
@@ -557,7 +556,7 @@ FONT_CHAR_122: ;z
 
 FONT_CHAR_123: ;{
     db $04, $08
-    db $01, $00, $01, $00, $00
+    db $00, $00, $00, $00, $00
     db $30, $60, $60, $C0, $60, $60, $60, $30
 
 FONT_CHAR_124: ;|

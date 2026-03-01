@@ -91,6 +91,4 @@ GFX_ColorInit:
     
     ldir
 
-    ;call FontLoadLarge
-
     ret

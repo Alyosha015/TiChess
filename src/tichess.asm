@@ -11,6 +11,7 @@
     include "macros.asm"
 
     include "main.asm"
+    include "memory.asm"
 
     include "game/game.asm"
 
@@ -29,7 +30,7 @@
 ;rom-data
     include "data/font.asm"
     include "data/sprites.asm"
-    include "data/chessLUTs.asm"
+    ; include "data/chessLUTs.asm"
 
     ; ;debugging
     ; include "debug/console.asm"

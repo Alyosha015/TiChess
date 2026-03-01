@@ -32,6 +32,7 @@
 
     ;assumes x coordinate is stored in BC, y in DE, and stores result in HL.
     ;calculates HL = DE * 320 + BC
+    ;only HL, DE, and BC are effected.
     macro GFX_ScreenIndex
         ld hl, 64 * 256 ;ld h, 64
         ld l, e

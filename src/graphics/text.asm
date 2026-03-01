@@ -1,370 +1,310 @@
-;creates sprite definitions and fills lookup table for font at
-;2x scale, doing it at runtime this way to keep the program size down.
-;uses memory starting from ti.pixelShadow.
-;doesn't preserve registers
-
-FontLoadLarge:
-    ;IX - sprite source
-    ;IY - destination
-
-    ld hl, font_tbl_ptr
-    ld de, FONT_LARGE_TABLE
-    ld (hl), de
-
-    ld iy, ti.pixelShadow
-    ld ix, FONT_CHAR_32
-
+;****************************************************************
+; GFX_LoadLargeFont -   creates sprite definitions / ascii lookup table
+;                       for font at 2x scale. The sprite definitions are
+;                       stored in the ti.pixelShadow free memory area.
+;
+; INPUTS / PRESERVES: NONE
+;
+;****************************************************************
+GFX_LoadLargeFont:
     ;registers:
-    ;   C - counter
-    ld c, 0
-.spriteLoadLoop:
+    ;   C - sprite load loop counter
+    ;
+
+    ld hl, MEM_FONT_TABLE_LARGE
+    ld (GFX_LLF_TABLE_PTR), hl
+    ld hl, MEM_LARGE_FONT
+    ld (GFX_LLF_DATA_PTR), hl
+
+    ld hl, FONT_TABLE
+    ld c, 95
+.fontLoadLoop:
+    ld ix, (hl) ;load next pointer to sprite data
+    inc hl
+    inc hl
+    inc hl
+
+    push hl ;preserve font table pointer / loop counter
     push bc
+    call _GFX_LoadLargeFont_Sprite
+    pop bc ;restore font table pointer / loop counter
+    pop hl
 
-    call FontLoadLarge_LdSprite
-
-    pop bc
-    inc c
-    ld a, c
-    cp 95
-    jp nz, .spriteLoadLoop
+    dec c
+    jr nz, .fontLoadLoop
 
     ret
 
-font_tbl_ptr: rb 3
+;variables used by LoadLargeFont subroutines:
+GFX_LLF_TABLE_PTR: rb 3 ;tracks where to write next table entry
+GFX_LLF_DATA_PTR: rb 3  ;tracks where to write next sprite data entry
+GFX_LLF_ROW_SIZE_BYTES: db 0    ;2x scale sprite's row size in bytes
 
-;expects IX and IY filled
-FontLoadLarge_LdSprite:
+;indexed by current bit from the left, returns that bit in 2x size form.
+GFX_LLF_LUT_PIXELS:
+    db 11000000b, 00110000b, 00001100b, 00000011b
+    db 11000000b, 00110000b, 00001100b, 00000011b
+
+;****************************************************************
+; _GFX_LoadLargeFont_Sprite - Used to create 2x scale sprite definition.
+;
+; INPUTS:
+;   IX - sprite data pointer
+;
+; PRESERVES:
+;   NONE
+;
+;****************************************************************
+_GFX_LoadLargeFont_Sprite:
     ;registers:
-    ;   B - source width
-    ;   C - source height
-    ;   IX - sprite source
-    ;   IY - destination
-;add jumptable entry
-    ld hl, (font_tbl_ptr)
+    ;   IX - sprite data pointer (source, to copy)
+    ;   IY - sprite data pointer (destination)
+
+    ;add next sprite to font table and update for next entry.
+    ld hl, (GFX_LLF_TABLE_PTR)
+    ld iy, (GFX_LLF_DATA_PTR)
     ld (hl), iy
-    ld de, 3
-    add hl, de
-    ld (font_tbl_ptr), hl
+    inc hl
+    inc hl
+    inc hl
+    ld (GFX_LLF_TABLE_PTR), hl
 
-;load width / height
-    ld b, (ix) ;w
-    ld c, (ix+1) ;h
+    ;calculate new width / height, and row size in bytes
+    ld a, (ix)      ;width
+    add a
+    ld (iy), a
 
-    ld d, b
-    sla d
-    ld (iy), d
+    add 7           ;calc row size in bytes (size = (bits + 7) / 8)
+    srl a
+    srl a
+    srl a
+    ld (GFX_LLF_ROW_SIZE_BYTES), a
 
-    ld d, c
-    sla d
-    ld (iy+1), d
+    ld a, (ix+1)    ;height
+    add a
+    ld (iy+1), a
 
-;load offsets
-    push bc ;store w/h
-
+    ;calculate new offset
     ld bc, 0
-    ld de, 0
-
-    ld c, (ix+2) ;x
+    ld c, (ix+2)    ;x offset
     sla c
     ld (iy+2), c
 
-    ld e, (ix+3) ;y
+    ld de, 0
+    ld e, (ix+3)    ;y offset
     sla e
     ld (iy+3), e
 
-    GFX_ScreenIndex
-
+    GFX_ScreenIndex ;new vram offset
     ld (iy+4), hl
 
-    ld de, 7
-    add ix, de
-    add iy, de
+    ;sprite bitmap section
 
-    pop bc ;restore w/h
+    ld a, (ix+1)    ;load height
 
-    ld a, c
-    cp 0
-    ret z
+    lea ix, ix+7 ;make ix/iy point to the start of bitmap data
+    lea iy, iy+7
 
-;load sprite bitmap
-    ;registers:
-    ;   B - temp data
-    ;   C - width
-    ;   D - width counter
-    ;   E - current byte being drawn
-    ;   H - number of bits to draw
-    ;   L - bit drawn counter
-    ;   IX - sprite source
-    ;   IY - destination
+    ld (GFX_LLF_DATA_PTR), iy
+
+    or a
+    ret z ;early return if sprite has 0 height.
+
+    ;registers
+    ;   A - temp
+    ;   B - width (of original sprite's row)
+    ;   C - pixels left to convert (counts to 0)
+    ;   D - height (counts to 0)
+    ;   E - byte to convert
+    ;   H - bits remaining
+    ;   L - bits drawn counter
     ;
-    ;shadow registers:
-    ;   B - source height
-    ;   C - height counter
-    ;   DE - ?
-    ;   HL - ?
-    push bc
-    exx ;alt start
-    pop bc
-    ld b, c
-    ld c, 0
-    exx ;alt end
+    ;   IX - source data
+    ;   IY - destination data
+    ;
+    ;alt registers:
+    ;   BC/DE/HL - temp for LDIR
+    ;
 
-    ld c, b
-    ld de, 0
+    ld b, (ix-7) ;load original width
+    ld d, (ix-6) ;load original height
+
 .loadRow:
-    ld d, c
+    push iy     ;preserve start of row location
+    ld c, b
 .loadByte:
-    ld (iy), 0 ;just in case
-    ld l, 0
-    ld e, (ix)
+    ld (iy), 0  ;prepare destination
+
+    ld e, (ix)  ;get next byte to convert
     inc ix
-    ld a, d
+
+    ld hl, 8 * 256 + 0  ;resets counter (L) as well
+    ld a, c
     cp 8
-    jp c, .lessThan8px
-    ld h, 8
-    ld a, d
-    sub 8
-    ld d, a
-    jp .skipLessThan8px
-.lessThan8px:
-    ld h, d
-    ld d, 0
-.skipLessThan8px:
-.loadPixel:
-;destination byte has to be incremented halfway through.
-    ld a, l
-    cp 4
-    jp z, .incDstAddr
-    jp .skipIncDstAddr
-.incDstAddr:
-    inc iy
-    ld (iy), 0
-.skipIncDstAddr:
-    bit 7, e
-    jp nz, .is1
-    jp .skipIs1
-.is1:
-    push hl
-    exx ;alt reg start
-    pop hl
-    ld de, 0
-    ld e, l
-    ld hl, FONT2X_COPY_LUT
-    add hl, de
-    ld a, (hl)
-    exx ;alt reg end
-
-    ld b, a
-    ld a, (iy)
-    or b
-    ld (iy), a
-.skipIs1:
-    sla e
-
-    inc l
-    ld a, l
-    cp h
-    jp nz, .loadPixel
-
-    inc iy
-    ld a, d
-    cp 0
-    jp nz, .loadByte
-
-    ld a, c ;get number of bytes in row
-    add 3
-    srl a
-    srl a
-
-    exx ;alt reg start
-
-    push bc
-
-    ld bc, 0
+    jr nc, .skipPartialByte
+    ld h, c
+.skipPartialByte:
+    ld a, c
+    sub h
     ld c, a
 
-    lea hl, iy ;source
-    xor a
-    sbc hl, bc
-    
-    lea de, iy ;dest
+.loadBit:
+    ;since 1 byte of data turns into 2 in the new sprite,
+    ;destination address is incremented half-way through
+    ;a byte being loaded.
+    ld a, l
+    cp 4
+    jr nz, .skipDestByteIncrement
+.doDestByteIncrement:
+    inc iy
+    ld (iy), 0
+.skipDestByteIncrement:
+    bit 7, e
+    jr nz, .is1
+    jr .skipIs1
+.is1:
+    push bc
+    push hl
 
-    add iy, bc
+    ld bc, 0
+    ld c, l
+    ld hl, GFX_LLF_LUT_PIXELS
+    add hl, bc
+
+    ld a, (iy)
+    or (hl)
+    ld (iy), a
+    
+    pop hl
+    pop bc
+.skipIs1:
+    sla e   ;shift next bit to check into 7th bit.
+
+    inc l   ;load bit loop
+    ld a, l
+    cp h
+    jr nz, .loadBit
+
+    inc iy  ;move destination byte ptr
+    ld a, c ;load byte loop
+    or a
+    jr nz, .loadByte
+
+    ;since each pixel becomes a 2x2 block every row of data
+    ;needs to be repeated, which is done here using LDIR to
+    ;copy the row after it's done loading.
+    exx ;alt reg start
+
+    pop hl      ;restore start of row location (load source)
+    lea de, iy  ;load destination
+
+    ld bc, 0    ;load size
+    ld a, (GFX_LLF_ROW_SIZE_BYTES)
+    ld c, a
+
+    add iy, bc  ;update destination pointer to skip row
 
     ldir
 
-    pop bc
-
-    inc c
-    ld a, c
-    cp b
     exx ;alt reg end
-    jp nz, .loadRow
+
+    dec d   ;load row loop
+    jr nz, .loadRow
+
+    ld (GFX_LLF_DATA_PTR), iy
 
     ret
 
-;filled 2x scale pixels, indexed by current bit being read.
-FONT2X_COPY_LUT:
-    db 11000000b, 00110000b, 00001100b, 00000011b
-    db 11000000b, 00110000b, 00001100b, 00000011b
-
-;get width of text string in pixels using 2X font.
-;result stored in BC. Preserves all registers except BC.
-LargeTextRenderSize:
-    call TextRenderSize
+;****************************************************************
+; GFX_TextLargeRenderSize - Calculates length of provided text in
+;                           pixels if it was rendered in the 2x font.
+;
+; INPUTS:
+;   IY  = String Pointer (null terminated)
+;
+; OUTPUTS:
+;   BC  = Text size in pixels.
+;
+; PRESERVES:
+;   All
+;
+;****************************************************************
+GFX_TextLargeRenderSize:
+    call GFX_TextRenderSize
 
     sla c ;multiply BC by 2
     rl b
 
     ret
 
-;get width of text string in pixels.
-;result stored in BC. Preserves all registers except BC and A.
-TextRenderSize:
-    push ix
-    push de
-    push hl
-
-;registers:
-;   BC - size
-;   DE - temp
-;   HL - temp
-;   IX - str pointer
-    
-    ld de, 0
-    ld bc, 0
-.textLoop:
-    ld a, (ix)
-    sub 32
-    
-    ld d, 3
-    ld e, a
-    ld hl, FONT_TABLE
-    mlt de
-    add hl, de
-
-    ld hl, (hl) ;now has sprite data ptr
-
-    ld a, (hl) ;add sprite width
-    inc a
-
-    add c
-    ld c, a
-    ld a, b
-    adc 0
-    ld b, a
-
-    inc ix
-    ld a, (ix)
-    cp 0
-    jp nz, .textLoop
-
-    ld hl, -1 ;decrement by 1 since the last character doesn't need a empty line after it.
-    add hl, bc
-    push hl
-    pop bc
-
-    pop hl
-    pop de
-    pop ix
-
-    ret
-
-;expects x (0-319) in BC, y (0-239) in L, FG in D, BG in E, and string pointer in IX.
-DrawTextLarge:
-    push hl
-    push de
-
-    ld hl, selected_font_table
-    ld de, FONT_LARGE_TABLE
-    ld (hl), de
-
-    ld hl, selected_font_spacing
-    ld (hl), 2
-
-    pop de
-    pop hl
-
-    jp DrawTextSkipLoad
-
-;expects x (0-319) in BC, y (0-239) in L, FG in D, BG in E, and string pointer in IX.
-DrawText:
-    push hl
-    push de
-
-    ld hl, selected_font_table
-    ld de, FONT_TABLE
-    ld (hl), de
-
-    ld hl, selected_font_spacing
-    ld (hl), 1
-
-    pop de
-    pop hl
-;(don't use this)
-DrawTextSkipLoad:
-.drawTextLoop:
-    push ix ;preserve str ptr
-    push bc ;x
-    push hl ;y
-    push de ;bg/fg
-
-    ld a, (ix)
-    sub 32
-    ld hl, 0
-    ld l, a
-    ld h, 3
-    mlt hl
-    ld de, (selected_font_table)
-    add hl, de
-    ld ix, (hl) ;get address to sprite
-
-    pop de
-    pop hl
-    push hl
-    push de
-
-    push ix
-
-    call DrawSprite1bpp
-
-    pop iy ;sprite data pointer
-
-    pop de
-    pop hl
-    pop bc
-
-    ;add sprite width + (selected_font_spacing) to x
-    ld ix, 0
-    add ix, bc
-    ld bc, 0
-    ld a, (selected_font_spacing)
-    add (iy)
-    ld c, a
-    add ix, bc
-    push ix
-    pop bc
-
-    pop ix
-
-    inc ix
-    ld a, (ix)
-    cp 0
-    jp nz, .drawTextLoop
-
-    ret
-
-selected_font_table: rb 3
-selected_font_spacing: db 0
-
-GFX_FONT_TABLE: rb 3
-GFX_FONT_SPACING: db 0
-
-;************************************************
-; GFX_DrawText - Draws text at XY coordinates.
+;****************************************************************
+; GFX_TextRenderSize - Calculates length of provided text in
+;                      pixels if it was rendered.
 ;
 ; INPUTS:
-;   IX  = String Pointer (null terminated)
+;   IY  = String Pointer (null terminated)
+;
+; OUTPUTS:
+;   DE  = Text size in pixels.
+;
+; PRESERVES:
+;   All
+;
+;****************************************************************
+GFX_TextRenderSize:
+    push af
+    push ix
+    push iy
+    push hl
+
+    ld hl, 0
+
+.textLoop:
+    ld a, (iy)
+    or a
+    jr z, .nullChar
+
+    sub 32
+
+    ld de, 3
+    ld d, a
+    mlt de      ;DE = (a - 32) * 3
+
+    ld ix, FONT_TABLE
+    add ix, de
+    ld ix, (ix) ;load sprite data pointer
+
+    ld d, 0
+    ld e, (ix)  ;load sprite width
+    add hl, de  ;add sprite width to total text width
+    inc hl      ;increment to account for spacing between letters
+
+    jr .textLoop
+
+.nullChar:
+
+    dec hl      ;undo extra increment on last loop, since there's no following character.
+
+    push hl     ;transfer result to DE
+    pop de
+
+    pop hl
+    pop iy
+    pop ix
+    pop af
+    ret
+
+GFX_FONT_TABLE: rb 3 ;stores pointer to ascii -> sprite lookup table
+GFX_FONT_SPACING: db 0 ;spacing between characters
+
+;GFX_DrawText variables
+GFX_DRAW_TEXT_VRAM: rb 3 ;used to store vram location
+
+;****************************************************************
+; GFX_DrawTextLarge - Draws text at XY coordinates at 2x scale.
+;
+; INPUTS:
+;   IY  = String Pointer (null terminated)
 ;   BC  = X coordinate
 ;   DE  = Y coordinate
 ;   H   = Foreground Color
@@ -373,60 +313,97 @@ GFX_FONT_SPACING: db 0
 ; PRESERVES:
 ;   NONE
 ;
-;************************************************
-GFX_DrawText:
-    ld hl, FONT_TABLE
-    ld (GFX_FONT_TABLE), hl    
-    
-    ;register data:
-    ;   IX - string pointer
-    ;   IY - font char sprite pointer
-    ;   
-    ;
-    ;shadow registers:
-    ;
-    ;
-    ;
-    ;
-
+;****************************************************************
+GFX_DrawTextLarge:
     push hl ;preserve color
+    
+    ld hl, FONT_TABLE_LARGE
+    ld (GFX_FONT_TABLE), hl  
+    ld a, 2
+    ld (GFX_FONT_SPACING), a
+
+    jr __GFX_DrawTest_SkipRegularFontLoad
+
+;****************************************************************
+; GFX_DrawText - Draws text at XY coordinates.
+;
+; INPUTS:
+;   IY  = String Pointer (null terminated)
+;   BC  = X coordinate
+;   DE  = Y coordinate
+;   H   = Foreground Color
+;   L   = Background Color
+;
+; PRESERVES:
+;   NONE
+;
+;****************************************************************
+GFX_DrawText:
+    push hl ;preserve color
+    
+    ld hl, FONT_TABLE
+    ld (GFX_FONT_TABLE), hl  
+    ld a, 1
+    ld (GFX_FONT_SPACING), a
+
+__GFX_DrawTest_SkipRegularFontLoad:
+
+    ;register data:
+    ;   IX - font char sprite pointer
+    ;   IY - string pointer
+    ;
 
     GFX_ScreenIndex ;HL = 320 * DE + BC
-    ld de, (LCD_DrawBuffer) ;add vram start offset
-    add hl, de
-    push hl
-    pop iy ;vram location to IY
+    ld (GFX_DRAW_TEXT_VRAM), hl
 
 .drawTextLoop:
-    ld a, (ix)
-    inc ix
+    ld a, (iy)
+    inc iy
 
     or a
-    jr .nullCharacter
+    jr z, .nullCharacter
 
-    sub 32  ;a = (a - 32) * 3
-    ld h, a
-    add a
-    add h
+    sub 32  ;DE = (a - 32) * 3
+    ld de, 3 * 256
+    ld e, a
+    mlt de
 
     ld hl, (GFX_FONT_TABLE)
 
-    ld de, 0
+    add hl, de
+
+    ld ix, (hl)
+
+    ;the next vram location is calculated before the sprite is drawn,
+    ;so it has to be preserved on the stack.
+    ;
+    ;calculated by adding the sprite width and sprite spacing to the VRAM value.
+    ld hl, (GFX_DRAW_TEXT_VRAM)
+    push hl ;preserve VRAM location
+
+    ld d, 0     ;can only reset D instead of UDE since the last result
+                ;was from the DE = (a - 32) * 3 calculation
+    ld e, (ix)  ;load sprite width
+    add hl, de
+
+    ld a, (GFX_FONT_SPACING)
     ld e, a
     add hl, de
 
-    ld iy, (hl)
+    ld (GFX_DRAW_TEXT_VRAM), hl
 
-    pop hl ;save and preserve color again
-    push hl
+    pop hl ;restore VRAM location
 
-    push ix ;preserve string pointer
+    pop de ;peek color from stack
+    push de
+
+    push iy ;preserve str ptr
     call GFX_Sprite1BppFast
-    pop ix ;restore string pointer
+    pop iy  ;restore str ptr
 
     jr .drawTextLoop
 
 .nullCharacter:
-    pop hl ;get color off the stack
+    pop hl  ;get color off the stack
 
     ret

@@ -15,7 +15,7 @@
 ; GFX_Sprite1BppFast - GFX_Sprite1Bpp but without XY coordinate -> VRAM calculation.
 ;
 ; INPUTS:
-;   IY  = Sprite Data Pointer
+;   IX  = Sprite Data Pointer
 ;   BC  = n/a
 ;   D   = Foreground Color
 ;   E   = Background Color
@@ -30,7 +30,7 @@ GFX_Sprite1BppFast:
     or a
     ret z
 
-    push hl ;preserve color
+    push de ;preserve color
 
     jr __GFX_Sprite1Bpp_PostScreenIndexCalc
 
@@ -38,7 +38,7 @@ GFX_Sprite1BppFast:
 ; GFX_Sprite1Bpp - Draw sprite in 1bbp format.
 ;
 ; INPUTS:
-;   IY  = Sprite Data Pointer
+;   IX  = Sprite Data Pointer
 ;   BC  = X coordinate
 ;   DE  = Y coordinate
 ;   H   = Foreground Color
@@ -94,8 +94,7 @@ __GFX_Sprite1Bpp_PostScreenIndexCalc:
 
     ld b, (ix) ;load sprite width
 
-    ld de, 7 ;shift sprite pointer so (ix) is now the start of data section
-    add ix, de
+    lea ix, ix+7 ;shift sprite pointer so (ix) is now the start of data section
 
     pop de ;restore color data
 
@@ -154,8 +153,3 @@ __GFX_Sprite1Bpp_PostScreenIndexCalc:
     jr nz, .drawRow
 
     ret
-
-;x in bc, y in l, fg in d, bg in e, sprite pointer ix.
-DrawSprite1bpp:
-    ;old code in scratchpad/
-ret

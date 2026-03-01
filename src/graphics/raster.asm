@@ -49,10 +49,8 @@ GFX_FillRectangle:
     jr z, .drawRowSingleWidth
 
 .drawRow:
-    push iy
-    pop hl
-    push iy
-    pop de
+    lea hl, iy
+    lea de, iy
 
     inc de
     ld bc, 0

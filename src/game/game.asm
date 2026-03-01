@@ -1,17 +1,13 @@
 ;handle initilizing some things going to the correct ui screen's routines.
 ;GameTick is where all the game logic/rendering executes from.
 
-TEST_SPRITE:
-    db 11, 1, 0, 0, 0, 0, 0
-    db 11110000b, 11000000b
-    
-    db 11110000b, 11110000b, 11110000b, 11110000b
-    db 11001100b, 00110011b, 11001100b, 00110011b
-    db 10101010b, 01010101b, 10101010b, 01010101b
+TEST_STR:
+    db "Test String!", 0
 
 GameInit:
 ;Ui
     call GFX_ColorInit
+    call GFX_LoadLargeFont
 
 ;Logic
     ;timer
@@ -21,26 +17,23 @@ GameInit:
 
 ;scratchpad
 
-    ld ix, SPRITE_KING
+    ; ld ix, SPRITE_KING
+    ; ld bc, 0
+    ; ld de, 0
+    ; ld hl, COLOR_BOARD_PIECE_WHITE * 256 + COLOR_TRANSPARENT
+    ; call GFX_Sprite1Bpp
+
+    ld iy, TEST_STR
     ld bc, 0
     ld de, 0
-    ld hl, COLOR_BOARD_PIECE_WHITE * 256 + COLOR_TRANSPARENT
-    call GFX_Sprite1Bpp
+    ld hl, COLOR_GREEN * 256
+    call GFX_DrawTextLarge
 
-    ld bc, 100
-    ld de, 10
-    ld hl, 20 * 256 + 10
-    ld a, COLOR_BLUE
-    call GFX_FillRectangle
-
+    ld iy, TEST_STR
     ld bc, 0
-    ld de, 0
-    ld hl, 5 * 256 + 5
-    ld a, COLOR_YELLOW
-    call GFX_DrawRectangle
-
-
-    ;call GFX_DrawText
+    ld de, 18
+    ld hl, COLOR_GREEN * 256
+    call GFX_DrawText
 
     call LCD_Swap
 
