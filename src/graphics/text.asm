@@ -9,7 +9,6 @@
 GFX_LoadLargeFont:
     ;registers:
     ;   C - sprite load loop counter
-    ;
 
     ld hl, MEM_FONT_TABLE_LARGE
     ld (GFX_LLF_TABLE_PTR), hl

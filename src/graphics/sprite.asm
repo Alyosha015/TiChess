@@ -11,7 +11,7 @@
 ; 1. 1 bpp - mainly text. Only has a fg and bg color.
 ; 2. 8 bpp - fastest to draw, essentially a memory copy.
 
-;************************************************
+;****************************************************************
 ; GFX_Sprite1BppFast - GFX_Sprite1Bpp but without XY coordinate -> VRAM calculation.
 ;
 ; INPUTS:
@@ -24,7 +24,7 @@
 ; PRESERVES:
 ;   NONE
 ;
-;************************************************
+;****************************************************************
 GFX_Sprite1BppFast:
     ld a, (ix+1) ;early return if 0 height (such as the space character)
     or a
@@ -34,7 +34,7 @@ GFX_Sprite1BppFast:
 
     jr __GFX_Sprite1Bpp_PostScreenIndexCalc
 
-;************************************************
+;****************************************************************
 ; GFX_Sprite1Bpp - Draw sprite in 1bbp format.
 ;
 ; INPUTS:
@@ -47,7 +47,7 @@ GFX_Sprite1BppFast:
 ; PRESERVES:
 ;   NONE
 ;
-;************************************************
+;****************************************************************
 GFX_Sprite1Bpp:
     ;register data:
     ;   IX - sprite data

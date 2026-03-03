@@ -1,4 +1,4 @@
-;************************************************
+;****************************************************************
 ; GFX_FillRectangle - Draw filled rectangle.
 ;   DON'T use with 0 for width / height.
 ;
@@ -12,7 +12,7 @@
 ; PRESERVES:
 ;   A, B', HL'
 ;
-;************************************************
+;****************************************************************
 GFX_FillRectangle:
     ;register data:
     ;   IXH - [width - 1]
@@ -79,7 +79,7 @@ GFX_FillRectangle:
 
     ret
 
-;************************************************
+;****************************************************************
 ; GFX_DrawRectangle - Draw rectangle with 1 pixel
 ;   border
 ;
@@ -93,7 +93,7 @@ GFX_FillRectangle:
 ; PRESERVES:
 ;   A, Shadow Registers
 ;
-;************************************************
+;****************************************************************
 GFX_DrawRectangle:
     ;register data:
     ;   IXH - [width - 1]
