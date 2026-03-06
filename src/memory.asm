@@ -11,7 +11,22 @@
 ; D09466h: plotSScreen      - 21945 bytes
 ; D0EA1Fh: saveSScreen      - 21945 bytes
 
-MEM_FONT_TABLE_LARGE := ti.pixelShadow
+MEM_PS := ti.pixelShadow
+MEM_PS2 := ti.pixelShadow2
+
+;pixelShadow
+MEM_FONT_TABLE_LARGE := MEM_PS
 MEM_LARGE_FONT := MEM_FONT_TABLE_LARGE + 3 * 95
 
+;pixelShadow2
+MEM_BUI_DIRTY_SQUARES := MEM_PS2    ;64 B
+
+
+;cmdPixelShadow
+
+
+;plotSScreen
 MEM_MOVES_HEAP := ti.plotSScreen
+
+
+;saveSScreen

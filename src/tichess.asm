@@ -14,6 +14,8 @@
     include "memory.asm"
 
     include "game/game.asm"
+    include "game/variables.asm"
+    include "game/boardui.asm"
 
     include "graphics/color.asm"
     include "graphics/lcd.asm"

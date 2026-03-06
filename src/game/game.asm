@@ -1,45 +1,33 @@
-;handle initilizing some things going to the correct ui screen's routines.
-;GameTick is where all the game logic/rendering executes from.
-
-TEST_STR:
-    db "Test String!", 0
-
+;****************************************************************
+; GameInit - intilizing ui, timers, etc
+;****************************************************************
 GameInit:
 ;Ui
     call GFX_ColorInit
     call GFX_LoadLargeFont
 
 ;Logic
-    ;timer
     call TimerDisable
     call TimerReset
     call TimerEnable
 
 ;scratchpad
 
-    ; ld ix, SPRITE_KING
-    ; ld bc, 0
-    ; ld de, 0
-    ; ld hl, COLOR_BOARD_PIECE_WHITE * 256 + COLOR_TRANSPARENT
+    ld ix, SPRITE_QUEEN
+    ld de, 0
+    ld bc, 0
+    ld hl, COLOR_WHITE * 256
     ; call GFX_Sprite1Bpp
 
-    ld iy, TEST_STR
-    ld bc, 0
-    ld de, 0
-    ld hl, COLOR_GREEN * 256
-    call GFX_DrawTextLarge
-
-    ld iy, TEST_STR
-    ld bc, 0
-    ld de, 18
-    ld hl, COLOR_GREEN * 256
-    call GFX_DrawText
+    call BUI_DrawBoardForce
 
     call LCD_Swap
 
     ret
 
-;handles exiting the program.
+;****************************************************************
+; GameExit - call to properly exit program
+;****************************************************************
 GameExit:
 
     call Exit
@@ -53,6 +41,9 @@ game_state: db GAME_UI_MAIN
 
 game_CallTable:
 
+;****************************************************************
+; GameTick - all game logic and rendering happens from here
+;****************************************************************
 GameTick:
     
     call WaitForKey

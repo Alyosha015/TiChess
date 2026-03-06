@@ -20,12 +20,13 @@
     LCD_PALETTE := $E30200 ;color palette for indexed rendering
 
     ;expects ti.lcdBppXX (likely ti.lcdBpp8)
+    ;destroys A
     macro SetBpp bpp
         ld a, bpp
         ld (LCD_CTRL), a
     end macro
 
-    ;resets to default 16 bit color mode
+    ;resets to default 16 bit color mode, destroys A
     macro ResetBpp
         SetBpp ti.lcdBpp16
     end macro
@@ -47,44 +48,64 @@
         add hl, de  ;hl = de * 64 + [DE * 256] + bc
     end macro
 
-;Contains start address of buffer you should draw to.
+;contains start address of buffer not currently being displayed
+;(draw destination buffer) in the case of double buffering,
+;or the start of vram if double buffering is disabled.
 LCD_DrawBuffer: dl LCD_BUFFER_0
 
-LCD_EnableDoubleBuffering:
-    ld hl, LCD_DrawBuffer
-    ld de, LCD_BUFFER_1
-    ld (hl), de
+;contains start address of buffer currently being displayed
+;in the case of double buffering, or start of vram if double
+;buffering is disabled.
+;
+;NOTE: just a mapping to the LCD_DMA control register.
+LCD_DisplayBuffer := LCD_DMA
 
-    ld hl, LCD_DMA
+;****************************************************************
+; LCD_EnableDoubleBuffering - enables double buffering
+;
+; DESTROYS: A, HL, DE
+;
+;****************************************************************
+LCD_EnableDoubleBuffering:
+    ld de, LCD_BUFFER_1
+    ld (LCD_DrawBuffer), de
+
     ld de, LCD_BUFFER_0
-    ld (hl), de
+    ld (LCD_DMA), de
 
     ;set interrupt status for double buffering
-    ld l, LCD_ICR and $FF ;reuse $E300xx part of address from LCD_DMA.
-    ld (hl), 4
+    ld a, 4
+    ld (LCD_ICR), a
 
     ret
 
-
+;****************************************************************
+; LCD_DisableDoubleBuffering - disables double buffering
+;
+; DESTROYS: A, HL, DE
+;
+;****************************************************************
 LCD_DisableDoubleBuffering:
-    ld hl, LCD_DMA
     ld de, LCD_BUFFER_0
-    ld (hl), de
+    ld (LCD_DrawBuffer), de
+    ld (LCD_DMA), de
 
-    ld l, LCD_ICR and $FF
-    ld (hl), 0
-
-    ld (LCD_DrawBuffer), de ;LCD_BUFFER_0
+    xor a
+    ld (LCD_ICR), a
 
     ret
 
-
-;Swaps which buffer the LCD is drawing, and sets
-;LCD_DrawBuffer to the new unused one for rendering
-;the next frame. Waits until VSYNC interrupt to prevent
-;screen tearing.
+;****************************************************************
+; LCD_Swap - For use with double buffering, swaps which buffer
+; is being displayed and which is being written too. Updates LCD_DrawBuffer.
+;
+; Waits until VSYNC interrupt to prevent screen tearing.
+;
+; DESTROYS: HL, DE
+;
+;****************************************************************
 LCD_Swap:
-    ;do the actual swap
+    ;do the swap
     ld hl, (LCD_DrawBuffer)
     ld de, (LCD_DMA)
     ld (LCD_DrawBuffer), de
@@ -96,27 +117,54 @@ LCD_Swap:
     ld l, LCD_RIS and $FF
 .waitLoop:
     bit 2, (hl)
-    jp z, .waitLoop
+    jr z, .waitLoop
 
     ret
 
-
-;Copies LCD_BUFFER_1 into LCD_BUFFER_0
-;Doesn't preserve HL, DE, BC.
+;****************************************************************
+; LCD_Blit - Copies LCD_DrawBuffer to LCD_DisplayBuffer.
+;
+; DESTROYS: HL, DE, BC
+;
+;****************************************************************
 LCD_Blit:
-    ld hl, LCD_BUFFER_1
-    ld de, LCD_BUFFER_0
+    ld hl, (LCD_DrawBuffer)
+    ld de, (LCD_DisplayBuffer)
     ld bc, NUM_PIXELS
 
     ldir
 
     ret
 
+;****************************************************************
+; LCD_ReverseBlit - Copies LCD_DisplayBuffer to LCD_DrawBuffer.
+;
+; DESTROYS: HL, DE, BC
+;
+;****************************************************************
+LCD_ReverseBlit:
+    ld hl, (LCD_DisplayBuffer)
+    ld de, (LCD_DrawBuffer)
+    ld bc, NUM_PIXELS
 
+    ldir
+
+    ret
+
+;****************************************************************
+; LCD_Clear - Zeroes LCD_DrawBuffer. 
+;
+; DESTROYS: A, HL, DE, BC
+;
+;****************************************************************
 LCD_Clear:
-    xor a, a
-;Expects color palette index in A.
-;Doesn't preserve HL, DE, BC.
+    xor a
+;****************************************************************
+; LCD_Clear - Sets LCD_DrawBuffer to value in A. 
+;
+; DESTROYS: HL, DE, BC
+;
+;****************************************************************
 LCD_ClearColor:
     ld hl, (LCD_DrawBuffer)
     push hl
@@ -128,15 +176,3 @@ LCD_ClearColor:
     ldir
 
     ret
-
-
-;Expects pointer to palette in HL, number of colors in BC.
-;LCD_LoadPalette:
-;    sla c ;multiply BC by 2 since colors are 2 bytes each.
-;    rl b
-;
-;    ld de, LCD_PALETTE
-;
-;    ldir
-;
-;    ret
