@@ -6,6 +6,9 @@ GameInit:
     call GFX_ColorInit
     call GFX_LoadLargeFont
 
+;Chess Engine
+    call Engine_Init
+
 ;Logic
     call TimerDisable
     call TimerReset

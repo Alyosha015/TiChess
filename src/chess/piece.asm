@@ -1,8 +1,8 @@
-;PIECE FORMAT:
-; C T T T
-; 3 2 1 0
+;Piece data format:
+; . . . . C T T T
+; 7 6 5 4 3 2 1 0
 ;
-; C = color (1 = white)
+; C = color (1 (8?) = white, 0 = black)
 ; T = piece type
 
     PIECE_NONE := 0
@@ -19,6 +19,3 @@
 
     MASK_PIECE_TYPE := 0111b
     MASK_PIECE_COLOR := 1000b
-
-PieceToAscii:
-    db ".","kqrbnp",0,0,"KQRBNP"
