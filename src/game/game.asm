@@ -8,6 +8,8 @@ GameInit:
 
 ;Chess Engine
     call Engine_Init
+    ld ix, FEN_StartPosition
+    call FEN_Load
 
 ;Logic
     call TimerDisable
@@ -16,13 +18,22 @@ GameInit:
 
 ;scratchpad
 
-    ld ix, SPRITE_QUEEN
-    ld de, 0
-    ld bc, 0
-    ld hl, COLOR_WHITE * 256
-    ; call GFX_Sprite1Bpp
-
     call BUI_DrawBoardForce
+
+    ld hl, _fen_sections
+    ld de, 0
+    ld e, (hl)
+
+    ld hl, FEN_StartPosition
+    add hl, de
+    ld a, (hl)
+    ld (TestStr), a
+
+    ld bc, 0
+    ld de, 0
+    ld hl, COLOR_WHITE * 256 + COLOR_TRANSPARENT
+    ld iy, TestStr
+    call GFX_DrawTextLarge
 
     call LCD_Swap
 
@@ -56,3 +67,5 @@ GameTick:
 
     ret
 
+TestStr:
+    db ".",0

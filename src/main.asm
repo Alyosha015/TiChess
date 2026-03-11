@@ -51,5 +51,3 @@ Exit:
     ld (RunGame), a
     ret
 
-StartPosFen:
-    db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0

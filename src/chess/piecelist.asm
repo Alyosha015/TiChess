@@ -52,11 +52,11 @@ PL_LUT_WHITE_SIZE := 3 + 3*6
 ; PL_Init - Creates LUT table for piecelists.
 ;****************************************************************
 PL_Init:
-    ld ix, PL_Table
+    ld ix, PL_Data
     ld iy, PL_Black + 3 ;account for 3 bytes of 0 padding
     call _PL_InitSideLUT
 
-    ld ix, PL_Table + PL_RESERVE_BYTE_COUNT * 6    ;accounts for black piecelists
+    ld ix, PL_Data + PL_RESERVE_BYTE_COUNT * 6    ;accounts for black piecelists
     ld iy, PL_White + 3
     call _PL_InitSideLUT
 

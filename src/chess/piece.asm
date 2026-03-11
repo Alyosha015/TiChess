@@ -5,17 +5,17 @@
 ; C = color (1 (8?) = white, 0 = black)
 ; T = piece type
 
-    PIECE_NONE := 0
+PIECE_NONE := 0
 
-    PIECE_KING := 1
-    PIECE_QUEEN := 2
-    PIECE_ROOK := 3
-    PIECE_BISHOP := 4
-    PIECE_KNIGHT := 5
-    PIECE_PAWN := 6
+PIECE_KING := 1
+PIECE_QUEEN := 2
+PIECE_ROOK := 3
+PIECE_BISHOP := 4
+PIECE_KNIGHT := 5
+PIECE_PAWN := 6
 
-    PIECE_WHITE := 8
-    PIECE_BLACK := 0
+PIECE_WHITE := 8
+PIECE_BLACK := 0
 
-    MASK_PIECE_TYPE := 0111b
-    MASK_PIECE_COLOR := 1000b
+MASK_PIECE_TYPE := 0111b
+MASK_PIECE_COLOR := 1000b
