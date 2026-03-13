@@ -20,20 +20,11 @@ GameInit:
 
     call BUI_DrawBoardForce
 
-    ld hl, _fen_sections
-    ld de, 0
-    ld e, (hl)
-
-    ld hl, FEN_StartPosition
-    add hl, de
-    ld a, (hl)
-    ld (TestStr), a
-
-    ld bc, 0
-    ld de, 0
-    ld hl, COLOR_WHITE * 256 + COLOR_TRANSPARENT
-    ld iy, TestStr
-    call GFX_DrawTextLarge
+    ; ld bc, 0
+    ; ld de, 0
+    ; ld hl, COLOR_WHITE * 256 + COLOR_TRANSPARENT
+    ; ld iy, TestStr
+    ; call GFX_DrawTextLarge
 
     call LCD_Swap
 

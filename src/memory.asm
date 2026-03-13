@@ -31,7 +31,7 @@ MEM_PL_LUT_WHITE := MEM_PL_LUT + PL_LUT_BLACK_SIZE
 
     ;next 4 are all 64 bytes each.
 MEM_ENGINE_BOARD := MEM_PL_LUT + PL_LUT_BLACK_SIZE + PL_LUT_WHITE_SIZE ;64 byte board representation
-MEM_ENGINE_ATTACK_MAP := MEM_ENGINE_BOARD + 64
+MEM_ENGINE_ATTACK_MAP := MEM_ENGINE_BOARD + 64      ;note that the engine expects the 3 maps to continuous memory
 MEM_ENGINE_CHECK_MAP := MEM_ENGINE_ATTACK_MAP + 64
 MEM_ENGINE_PIN_MAP := MEM_ENGINE_CHECK_MAP + 64
 

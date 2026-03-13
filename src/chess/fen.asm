@@ -8,10 +8,15 @@ FEN_StartPosition:
     db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0
 
 
-;if optimizing for size was needed I could fit the "_fen_xxxx" variables
-;the unused parts of this lookup table, but that seems excessive.
-FEN_LUT_Ascii_to_piece_type:    ;use ascii mod 32 to index
+;if optimizing for size was needed I could fit the "_fen_xxxx" variables in the unused parts
+;of this lookup table and merge it with FEN_LUT_Ascii_to_castle_flags, but that seems excessive.
+FEN_LUT_Ascii_to_piece_type:    ;inde with ASCII MOD 32
     db 0, 0, PIECE_BISHOP, 0, 0, 0, 0, 0, 0, 0, 0, PIECE_KING, 0, 0, PIECE_KNIGHT, 0, PIECE_PAWN, PIECE_QUEEN, PIECE_ROOK
+
+FEN_LUT_Ascii_to_castle_flags:  ;index with ASCII - 75 ('K')
+    db CASTLE_FLAG_WHITE_KING, 0, 0, 0, 0, 0, CASTLE_FLAG_WHITE_QUEEN, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;Z
+    db 0, 0, 0, 0, 0, 0 ;characters between 'Z' and 'a'
+    db 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, CASTLE_FLAG_BLACK_KING, 0, 0, 0, 0, 0, CASTLE_FLAG_BLACK_QUEEN ;a-q
 
 _fen_string_ptr: dl 0
 _fen_sections: rb 5             ;used to store where to split fen string. See comment in subroutine below.
@@ -154,16 +159,73 @@ FEN_Load:
     dec c
     jr nz, .pieceParseLoop
 
+    ld de, 0
+    ld bc, 0
+
 ;load turn to move
+    ld hl, _fen_sections
+    ld e, (hl)
 
+    ld hl, (_fen_string_ptr)
+    add hl, de
+    ld a, (hl)
+    cp 'w'
+    ld a, 1                     ;load A with 1 or 0 depending on side to move
+    jr z, .skipBlackToMove
+    xor a
+.skipBlackToMove:
+    ld (C_WhiteToMove), a
 
+;load castle flags (KQkq etc)
 
-;load castle flags
+    xor a
+    ld (C_CastleFlags), a
+
+    ld hl, _fen_sections + 1    ;start of castle flags string
+    ld e, (hl)
+    ld ix, (_fen_string_ptr)
+    add ix, de
+
+.casteFlagsParseLoop:
+    ld a, (ix)                  ;load character
+    inc ix
+
+    cp ' '
+    jr z, .castleFlagParseLoopBreak
+    cp '-'                      ;if there aren't any castle flags '-' is used by the notation
+    jr z, .castleFlagParseLoopBreak
+
+    sub 'K'
+    ld hl, FEN_LUT_Ascii_to_castle_flags
+    ld e, a
+    add hl, de
+
+    ld a, (C_CastleFlags)
+    or (hl)
+    ld (C_CastleFlags), a
+
+    jr .casteFlagsParseLoop
+.castleFlagParseLoopBreak:
 
 ;load ep file
+    ld a, EN_PASSANT_NONE
+    ld (C_EpFile), a
+    
+    ld hl, _fen_sections + 2
+    ld e, (hl)
+    ld hl, (_fen_string_ptr)
+    add hl, de
 
-;
+    ld a, (hl)
+    cp '-'
+    jr z, .skipEpFileParse
 
-;
+    sub 'a'
+    ld (C_EpFile), a
+.skipEpFileParse:
+
+;half-move clock
+
+;full move clock
 
     ret

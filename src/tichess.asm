@@ -32,12 +32,13 @@
 
     ;chess engine
     include "chess/variables.asm"
-    include "chess/move.asm"
-    include "chess/piece.asm"
+    include "chess/definitions.asm"
 
     include "chess/engine.asm"
     include "chess/piecelist.asm"
     include "chess/fen.asm"
+
+    include "chess/movegen.asm"
 
 ;read only data
     include "data/font.asm"
