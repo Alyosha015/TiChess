@@ -21,5 +21,8 @@ C_WhiteToMove: db 0
 C_EpFile: db 0
 C_CastleFlags: db 0
 
-
-
+;if white is to move, current index would be 1, current color 8, enemy index 0, enemy color 0
+C_CurrentIndex: db 0
+C_CurrentColor: db 0
+C_EnemyIndex: db 0
+C_EnemyColor: db 0

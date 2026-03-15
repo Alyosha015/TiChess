@@ -35,6 +35,8 @@ _fen_board_index: db 0
 ;
 ;****************************************************************
 FEN_Load:
+    call Engine_Reset
+
     xor a
     ld (_fen_count), a
 

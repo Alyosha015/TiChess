@@ -20,11 +20,16 @@ GameInit:
 
     call BUI_DrawBoardForce
 
-    ; ld bc, 0
-    ; ld de, 0
-    ; ld hl, COLOR_WHITE * 256 + COLOR_TRANSPARENT
-    ; ld iy, TestStr
-    ; call GFX_DrawTextLarge
+    call MoveGen_Generate
+
+    ld a, (C_EnemyKing)
+    ld (TestStr), a
+
+    ld bc, 0
+    ld de, 0
+    ld hl, COLOR_WHITE * 256 + COLOR_TRANSPARENT
+    ld iy, TestStr
+    call GFX_DrawTextLarge
 
     call LCD_Swap
 
