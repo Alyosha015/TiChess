@@ -25,7 +25,7 @@ MoveGen_CountCheck:
 
 ;****************************************************************
 ; MoveGen_SetPieceListVariables - (internal) sets C_CurrentPlPtr
-; and C_EnemyPlPtr based on C_WhiteToMove value.
+;   and C_EnemyPlPtr based on C_WhiteToMove value.
 ;
 ; DESTROYS: DE, AF
 ;****************************************************************
@@ -64,7 +64,8 @@ MoveGen_GeneratePinMaps:
     ret
 
 ;****************************************************************
-; MoveGen_GenerateEnemySlidingAttackMap - (internal)
+; MoveGen_GenerateEnemySlidingAttackMap - (internal) enemy moves
+;   for queen / rook / bishop.
 ;
 ; INPUTS:
 ;   IX - selected piece list pointer.
@@ -84,14 +85,24 @@ MoveGen_GenerateEnemySlidingAttackMap:
 
     ret
 
+MoveGen_GenerateEnemyKnightAttackMap:
+
+    ret
+
+MoveGen_GenerateEnemyPawnAttackMap:
+
+    ret
+
+MoveGen_GenerateEnemyKingAttackMap:
+
+    ret
+
 ;****************************************************************
 ; MoveGen_GenerateAttackMaps - (internal) creates pin/check/attack
-; maps.
+;   maps.
 ;
 ; DESTROYS: All
 ;****************************************************************
-;
-;
 ;
 ;****************************************************************
 MoveGen_GenerateAttackMaps:
@@ -99,6 +110,8 @@ MoveGen_GenerateAttackMaps:
     cp MG_KING_NONE
     call nz, MoveGen_GeneratePinMaps
 
+    ;sliding piece attack maps
+    ;QUEEN
     ld ix, (C_EnemyPlPtr)
     ld de, PIECE_QUEEN * 3
     add ix, de
@@ -106,6 +119,63 @@ MoveGen_GenerateAttackMaps:
     or a
     ;ld bc, 8
     call nz, MoveGen_GenerateEnemySlidingAttackMap
+
+    ;ROOK
+
+    ;BISHOP
+
+    call MoveGen_GenerateEnemyKnightAttackMap
+    call MoveGen_GenerateEnemyPawnAttackMap
+
+    call MoveGen_GenerateEnemyKingAttackMap
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateKingMoves - (internal) moves for current king.
+;
+; DESTROYS: All
+;****************************************************************
+MoveGen_GenerateKingMoves:
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateSlidingMoves - (internal) moves for
+;   queen / rook / bishop.
+;
+; INPUTS:
+;   IX - selected piece list pointer.
+;   B - start direction (0-7)
+;   C - end direction (1-8) (offset by 1)
+;
+; DESTROYS: ALL
+;
+;****************************************************************
+;
+; Used to create moves for sliding pieces, with controls for what
+; directions to check to make it work for bishop/rook/queen movement.
+;
+;****************************************************************
+MoveGen_GenerateSlidingMoves:
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateKnightMoves - (internal) moves for knight.
+;
+; DESTROYS: ALL
+;****************************************************************
+MoveGen_GenerateKnightMoves:
+
+    ret
+
+;****************************************************************
+; MoveGen_GeneratePawnMoves - (internal) moves for pawns.
+;
+; DESTROYS: ALL
+;****************************************************************
+MoveGen_GeneratePawnMoves:
 
     ret
 
@@ -164,9 +234,31 @@ MoveGen_Init:
 
     ret
 
+;****************************************************************
+; MoveGen_Generate - Generates moves for current board state and
+;   position. Uses 
+;
+; INPUT: IX - Movelist pointer
+; OUTPUT: NONE
+;
+; DESTROYS: All
+;****************************************************************
 MoveGen_Generate:
     call MoveGen_Init
 
+    call MoveGen_GenerateAttackMaps
 
+    ld a, (C_CurrentKing)
+    cp MG_KING_NONE
+    call nz, MoveGen_GenerateKingMoves
+    
+    ; if the king is in double check (attacked by two pieces), the only way to
+    ; break it would be to move the king, therfore we can exit early and skip
+    ; generating moves logic for the other pieces since there are no moves anyway.
+    ld a, (C_InDoubleCheck)
+    dec a
+    ret z
+
+    
 
     ret

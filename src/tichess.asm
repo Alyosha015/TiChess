@@ -40,6 +40,8 @@
 
     include "chess/movegen.asm"
 
+    include "chess/test/dbg_move_generator.asm"
+
 ;read only data
     include "data/font.asm"
     include "data/sprites.asm"
