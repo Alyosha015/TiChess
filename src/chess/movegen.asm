@@ -51,6 +51,40 @@ MoveGen_SetPieceListVariables:
     ret
 
 ;****************************************************************
+; MoveGen_GeneratePinMaps - (internal)
+;****************************************************************
+;
+; Used to look at attacking pieces from the "persepective" of the
+; king, to determine if there are any checks and pins from sliding
+; pieces.
+;
+;****************************************************************
+MoveGen_GeneratePinMaps:
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateEnemySlidingAttackMap - (internal)
+;
+; INPUTS:
+;   IX - selected piece list pointer.
+;   B - start direction (0-7)
+;   C - end direction (1-8) (offset by 1)
+;
+; DESTROYS: ALL
+;
+;****************************************************************
+;
+; Used to create fill attack map for sliding pieces, with controls
+; for what directions to check to make it work for bishop/rook/queen
+; movement.
+;
+;****************************************************************
+MoveGen_GenerateEnemySlidingAttackMap:
+
+    ret
+
+;****************************************************************
 ; MoveGen_GenerateAttackMaps - (internal) creates pin/check/attack
 ; maps.
 ;
@@ -61,8 +95,17 @@ MoveGen_SetPieceListVariables:
 ;
 ;****************************************************************
 MoveGen_GenerateAttackMaps:
-    
+    ld a, (C_CurrentKing)
+    cp MG_KING_NONE
+    call nz, MoveGen_GeneratePinMaps
 
+    ld ix, (C_EnemyPlPtr)
+    ld de, PIECE_QUEEN * 3
+    add ix, de
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ;ld bc, 8
+    call nz, MoveGen_GenerateEnemySlidingAttackMap
 
     ret
 
