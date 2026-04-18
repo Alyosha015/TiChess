@@ -9,6 +9,11 @@ C_InDoubleCheck: db 0
 C_CurrentPlPtr: dl 0    ;holds addresses to look up tables of current and enemy pieceslists
 C_EnemyPlPtr: dl 0
 
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+; SECTION: UTILITY FUNCTIONS - helper subroutines, they are
+;   the most generalized parts of the move generator.
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
 ;****************************************************************
 ; MoveGen_CountCheck - (internal) increment inCheck / inDoubleCheck
 ;
@@ -23,32 +28,9 @@ MoveGen_CountCheck:
 
     ret
 
-;****************************************************************
-; MoveGen_SetPieceListVariables - (internal) sets C_CurrentPlPtr
-;   and C_EnemyPlPtr based on C_WhiteToMove value.
-;
-; DESTROYS: DE, AF
-;****************************************************************
-MoveGen_SetPieceListVariables:
-    ld a, (C_WhiteToMove)
-    or a
-    jr z, .blackToMove
-.whiteToMove:
-    ld de, PL_White
-    ld (C_CurrentPlPtr), de
-
-    ld de, PL_Black
-    ld (C_EnemyPlPtr), de
-
-    ret
-.blackToMove:
-    ld de, PL_Black
-    ld (C_CurrentPlPtr), de
-
-    ld de, PL_White
-    ld (C_EnemyPlPtr), de
-
-    ret
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+; SECTION: ENEMY'S PERSEPECTIVE ATTACK/CHECK/PIN MAP GENERATION
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 ;****************************************************************
 ; MoveGen_GeneratePinMaps - (internal)
@@ -85,51 +67,219 @@ MoveGen_GenerateEnemySlidingAttackMap:
 
     ret
 
-MoveGen_GenerateEnemyKnightAttackMap:
+;****************************************************************
+; MoveGen_GenerateEnemySlidingAttackMaps - (internal) calls
+;   MoveGen_GenerateEnemySlidingAttackMap for the 3 types of
+;   sliding pieces.
+;
+;****************************************************************
+MoveGen_GenerateEnemySlidingAttackMaps:
+    ;QUEEN
+    ld hl, (C_EnemyPlPtr)
+    ld de, PIECE_QUEEN * 3
+    add hl, de
+    ld ix, (hl)
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ld bc, 0 * 256 + 8
+    call nz, MoveGen_GenerateEnemySlidingAttackMap
 
-    ret
+    ;ROOK
+    ld hl, (C_EnemyPlPtr)
+    ld de, PIECE_ROOK * 3
+    add hl, de
+    ld ix, (hl)
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ld bc, 0 * 256 + 4
+    call nz, MoveGen_GenerateEnemySlidingAttackMap
 
-MoveGen_GenerateEnemyPawnAttackMap:
-
-    ret
-
-MoveGen_GenerateEnemyKingAttackMap:
+    ;BISHOP
+    ld hl, (C_EnemyPlPtr)
+    ld de, PIECE_BISHOP * 3
+    add hl, de
+    ld ix, (hl)
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ld bc, 4 * 256 + 8
+    call nz, MoveGen_GenerateEnemySlidingAttackMap
 
     ret
 
 ;****************************************************************
-; MoveGen_GenerateAttackMaps - (internal) creates pin/check/attack
-;   maps.
+; MoveGen_GenerateEnemyKnightAttackMap - (internal) enemy knight
+;   attack map / check map generation. Destroys all/alt registers
+;****************************************************************
+MoveGen_GenerateEnemyKnightAttackMap:
+    ld hl, (C_EnemyPlPtr)       ;load knight piecelist
+    ld de, PIECE_KNIGHT * 3
+    add hl, de
+    ld ix, (hl)
+
+    ld a, (ix + PL_DATA_SIZE)   ;number of knights
+    or a
+    ret z                       ;early return if there are no knights
+    ld c, a                     ;number of knights loop counter
+
+    ex af, af'                  ;load current king position into shadow A register
+    ld a, (C_CurrentKing)
+    ex af, af'
+
+.knightLoop:
+    ld a, (ix)                  ;get knight square
+    inc ix
+
+    push ix                     ;preserve knight piecelist
+
+    ld ix, LUT_KnightMoveCount  ;get number of valid knight moves for this square
+    ld de, 0
+    ld e, a
+    add ix, de
+    ld b, (ix)
+
+    ld ix, LUT_KnightMovement   ;destination square = LUT_KnightMovement[square * 8 + index]
+    ld d, 8
+    ; ld e, a                   ;note that E = A from above code already
+    mlt de
+    add ix, de
+
+    ld de, 0
+.squareLoop:
+    ld e, (ix)
+    inc ix
+
+    ld hl, C_AttackMap
+    add hl, de
+    ld (hl), 1
+    
+    ex af, af'                  ;swap to king position A register
+    cp e                        ;if king position and knight attack position match,
+    jr nz, .notInCheck          ;the king is now in check.
+
+    ld hl, C_CheckMap           ;update checkmap / checkcount
+    add hl, de                  ;note that DE has the knight attack square stored
+    ld (hl), 1
+    call MoveGen_CountCheck
+.notInCheck:
+    ex af, af'                  ;swap to knight position A register
+
+    djnz .squareLoop
+
+    pop ix                      ;restore knight piecelist
+
+    dec c
+    jr nz, .knightLoop
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateEnemyPawnAttackMap - (internal) enemy pawn
+;   attack map / check map generation. Destroys all/alt registers.
+;
+;   Note that this calculates the pawn attacks, so diagonal moves.
+;****************************************************************
+MoveGen_GenerateEnemyPawnAttackMap:
+    ld hl, (C_EnemyPlPtr)       ;load pawn piecelist
+    ld de, PIECE_PAWN * 3
+    add hl, de
+    ld ix, (hl)
+
+    ld a, (ix + PL_DATA_SIZE)   ;get number of pawns and early return
+    or a
+    ret z
+
+    exx ;alt reg start
+    ld c, a                     ;pawn loop counter
+    exx ;alt reg end
+
+    ex af, af'                  ;load current king position into shadow A register
+    ld a, (C_CurrentKing)
+    ex af, af'
+
+.pawnLoop:
+    ld a, (ix)                  ;get pawn position
+    inc ix
+
+    ld c, a                     ;copy pawn position
+    and 0111b                   ;calculate pawn file (column)
+    or a
+    jr z, .fileIs0
+    ;can go west (or left from white's perspective)
+
+.fileIs0:
+
+    cp 7                        ;note A still stores the pawn's file
+    jr z, .fileIs7
+    ;can go east (or right from white's perspective)
+
+.fileIs7:
+
+    exx ;alt reg start
+    dec c
+    exx ;alt reg end
+    jr nz, .pawnLoop
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateEnemyKingAttackMap - (internal) enemy king
+;   attack map generation. Destroys all registers.
+;****************************************************************
+MoveGen_GenerateEnemyKingAttackMap:
+    ld hl, LUT_KingMoveCount    ;get number of valid moves into register B (loop counter)
+    ld de, 0
+    ld e, a
+    add hl, de
+    ld b, (hl)
+
+    ld ix, LUT_KingMovement
+    ld d, 8
+    ; ld e, a                   ;note that E = A from above code already
+    mlt de
+    add ix, de
+
+    ld de, 0
+.kingMoveLoop:
+    ld e, (ix)
+    inc ix
+
+    ld hl, C_AttackMap
+    add hl, de
+    ld (hl), 1
+
+    djnz .kingMoveLoop
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateAttackMaps - (internal) creates attack/check/
+;   pin maps.
 ;
 ; DESTROYS: All
 ;****************************************************************
-;
+; The main purpose of this is for later allowing legal king
+; movement.
 ;****************************************************************
 MoveGen_GenerateAttackMaps:
     ld a, (C_CurrentKing)
     cp MG_KING_NONE
     call nz, MoveGen_GeneratePinMaps
 
-    ;sliding piece attack maps
-    ;QUEEN
-    ld ix, (C_EnemyPlPtr)
-    ld de, PIECE_QUEEN * 3
-    add ix, de
-    ld a, (ix + PL_DATA_SIZE)
-    or a
-    ;ld bc, 8
-    call nz, MoveGen_GenerateEnemySlidingAttackMap
-
-    ;ROOK
-
-    ;BISHOP
+    call MoveGen_GenerateEnemySlidingAttackMaps
 
     call MoveGen_GenerateEnemyKnightAttackMap
     call MoveGen_GenerateEnemyPawnAttackMap
 
-    call MoveGen_GenerateEnemyKingAttackMap
+    ld a, (C_EnemyKing)
+    cp MG_KING_NONE
+    call nz, MoveGen_GenerateEnemyKingAttackMap
 
     ret
+
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+; SECTION: MOVE GENERATOR FROM CURRENT SIDE'S PERSPECTIVE - does
+;   the "actual" move generation.
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 ;****************************************************************
 ; MoveGen_GenerateKingMoves - (internal) moves for current king.
@@ -176,6 +326,34 @@ MoveGen_GenerateKnightMoves:
 ; DESTROYS: ALL
 ;****************************************************************
 MoveGen_GeneratePawnMoves:
+
+    ret
+
+;****************************************************************
+; MoveGen_SetPieceListVariables - (internal) sets C_CurrentPlPtr
+;   and C_EnemyPlPtr based on C_WhiteToMove value. Used by
+;   MoveGen_Init.
+;
+; DESTROYS: DE, AF
+;****************************************************************
+MoveGen_SetPieceListVariables:
+    ld a, (C_WhiteToMove)
+    or a
+    jr z, .blackToMove
+.whiteToMove:
+    ld de, PL_White
+    ld (C_CurrentPlPtr), de
+
+    ld de, PL_Black
+    ld (C_EnemyPlPtr), de
+
+    ret
+.blackToMove:
+    ld de, PL_Black
+    ld (C_CurrentPlPtr), de
+
+    ld de, PL_White
+    ld (C_EnemyPlPtr), de
 
     ret
 

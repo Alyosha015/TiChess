@@ -21,11 +21,11 @@ Debug_PrintBoardMaps:
     call Debug_PrintMap
 
     ld ix, C_CheckMap
-    ld bc, 24 * 320 + 8 + 80
+    ld bc, 24 * 320 + 8 + 80 ; (88, 24)
     call Debug_PrintMap
     
     ld ix, C_PinMap
-    ld bc, 24 * 320 + 8 + 80 * 2
+    ld bc, 24 * 320 + 8 + 80 * 2 ; (168, 24)
     call Debug_PrintMap
 
     popall
@@ -41,7 +41,7 @@ DEBUG_PRINT_SQUARE_COUNTER: db 0
 ;
 ; INPUTS:
 ;   IX - map pointer
-;   BC - top left corner vram coordinates. 
+;   BC - top left corner vram coordinates
 ;
 ; DESTROYS: ALL
 ;****************************************************************
@@ -57,20 +57,29 @@ Debug_PrintMap:
     ld a, 8
     ld (DEBUG_PRINT_SQUARE_COUNTER), a
 .squareLoop:    ;loops over 8 squares in row
-    ld a, (ix)  ;get next datapoint
+    ld a, (ix)  ;get next datapoint, increment pointer to square to the right.
     inc ix
 
+    ;note that to keep the '*' and '.' centered to each other,
+    ;the vram position is modified in the case that a '.' is drawn.
+    ld hl, (DEBUG_PRINT_MAP_VRAM)   ;prepare vram position for drawing point
     ld iy, DEBUG_PRINT_MAP_CHAR_1
     dec a
     jr z, .squareIs1
 .squareIs0:
     ld iy, DEBUG_PRINT_MAP_CHAR_0
+    ld de, -(320 * 4) + (2)        ;move up vram position 4 and right 4 if '.'
+    add hl, de
 .squareIs1:
 
-    ld bc, (DEBUG_PRINT_MAP_VRAM)
+    push hl                         ;vram position HL -> BC
+    pop bc
+
     ld hl, COLOR_LIGHT_GRAY * 256 + COLOR_TRANSPARENT
     ld de, 0
+    push ix ;preserve map pointer
     call GFX_DrawText
+    pop ix ;restore mpa pointer
 
     ld hl, (DEBUG_PRINT_MAP_VRAM)
     ld de, 8
@@ -86,7 +95,7 @@ Debug_PrintMap:
 
     ld hl, (DEBUG_PRINT_MAP_VRAM)
     ld de, 320 * 8 - 8 * 8          ;moves vram location down 8 pixels and left 64
-                                    ;to calculate newline position.
+                                    ;to calculate new-line position.
     add hl, de
     ld (DEBUG_PRINT_MAP_VRAM), hl
 
