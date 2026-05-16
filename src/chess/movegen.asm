@@ -9,6 +9,13 @@ C_InDoubleCheck: db 0
 C_CurrentPlPtr: dl 0    ;holds addresses to look up tables of current and enemy pieceslists
 C_EnemyPlPtr: dl 0
 
+C_EnemyQueenPl: dl 0
+C_EnemyQueenCount: db 0
+C_EnemyRookPl: dl 0
+C_EnemyRookCount: db 0
+C_EnemyBishopPl: dl 0
+C_EnemyBishopCount: db 0
+
 ; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 ; SECTION: UTILITY FUNCTIONS - helper subroutines, they are
 ;   the most generalized parts of the move generator.
@@ -42,6 +49,194 @@ MoveGen_CountCheck:
 ;
 ;****************************************************************
 MoveGen_GeneratePinMaps:
+    ld de, 0
+
+    exx ;alt reg start
+    ld bc, 0 * 256 + 8          ;initial value checks all directions
+
+    ld ixl, 1                   ;initial isOrthogonal value, assumes rooks/queens exist
+
+    ld a, (C_EnemyQueenCount)   ;if there are any queens, skip the below checks.
+    or a
+    jr nz, .hasQueens
+
+    ld a, (C_EnemyRookCount)    ;if there are no rooks, don't check first 4 directions
+    or a
+    jr nz, .hasRooks
+    ld b, 4
+    dec ixl                     ;if there are no rooks, the first direction checked will be diagonal.
+.hasRooks:
+
+    ld a, (C_EnemyBishopCount)  ;if there are no bishops, don't check last 4 directions
+    or a
+    jr nz, .hasBishops
+    ld c, 4
+.hasBishops:
+.hasQueens:
+    exx ;alt reg end
+
+    ;registers:
+    ;   B - squares-to-edge squareLoop counter (decrements)
+    ;   C - targetPiece
+    ;   HL - temp
+    ;   DE - temp
+    ;   IXL - isOrthogonal (dir < 4)
+    ;   IXH - foundFriendlyPiece
+    ;   IYL - direction offset
+    ;   IYH - target square
+    ;shadow registers:
+    ;   B - direction start (increments)
+    ;   C - direction end + 1 (similar to DE' in MoveGen_GenerateEnemySlidingAttackMap)
+    ;   DE
+    ;   HL
+
+.dirLoop:
+    ld a, (C_CurrentKing)
+    ld iyh, a
+
+    ld hl, LUT_DirOffset    ;load dirOffset from dirIndex
+    exx ;alt reg start
+    ld a, b ;get dirIndex
+    exx ;alt reg end
+    ld e, a
+    add hl, de
+    ld a, (hl)
+    ld iyl, a
+
+    ld d, 8 ;square-to-edge = LUT_SquareToEdge[square * 8 + dirIndex]
+    ld e, iyh
+    mlt de
+    ld a, e ;add dirIndex
+    exx ;alt reg start
+    add b
+    exx ;alt reg end
+    ld e, a
+    ld hl, LUT_SquaresToEdge
+    add hl, de
+    ld b, (hl)
+
+    ld d, 0 ;partially clear DE after using mlt de, which can affect D
+
+    ld a, b ;skip squareLoop if B = 0
+    or a
+    jr z, .squareLoopBreak
+
+    ld ixh, 0       ;reset foundFriendlyPiece
+.squareLoop:
+    ld a, iyh       ;update target square
+    add iyl
+    ld iyh, a
+
+    ld hl, C_Board  ;get target piece
+    ld e, iyh
+    add hl, de
+    ld c, (hl)
+    ld a, c
+    or a        ;continue to next square in direction if square is empty (PIECE_NONE = 0)
+    jr z, .squareLoopContinue
+
+;friendly color tracking.
+;if a friendly piece is found on the line twice, we know there can't be a pin.
+;this is also used to trigger an early squareLoop break.
+    and MASK_PIECE_COLOR
+    ld hl, C_CurrentColor
+    cp (hl)
+    jr nz, .isEnemyPiece
+;( .isFriendlyPiece: )
+    ld a, ixh
+    or a
+    jr nz, .squareLoopBreak ;if foundFriendlyPiece was already 1, we can
+                            ;stop looping in this direction early.
+
+    inc ixh                 ;runs if foundFriendlyPiece = 0, setting it to 1.
+
+    jr .squareLoopContinue
+.isEnemyPiece:
+;enemy piece case.
+;if the enemy piece is a slider and can attack in the direction of this line,
+;(not a rook on a diagonal direction from th eking for example), then we need to mark
+;the line on the check/pin map. If there was a friendly piece found blocking it's only
+;a pin, otherwise it's a check. Note that it the sliding piece can't attack or it's
+;another type of piece then we can break since it would block any further sliding
+;pieces with a chance of attacking.
+
+    ld a, c
+    and MASK_PIECE_TYPE
+    cp PIECE_QUEEN
+    jr z, .sliderCanAttack
+
+    cp PIECE_ROOK
+    jr nz, .notRook
+    dec ixl ;if isOrthogonal was 1, then this would set the zero flag
+    jr z, .sliderCanAttack
+    inc ixl ;if the above failed, isOrthogonal is now 255, so reset back to 0.
+            ;otherwise the check for isBishop could have IXL = 255 | 0 | 1
+.notRook:
+
+    dec ixl ;if isOrthogonal is 1, this would set the zero flag
+    jr z, .squareLoopBreak  ;break since this only checks for diagonal sliders (bishops)
+
+    cp PIECE_BISHOP         ;this check is only reached if the line is diagonal, so if it's
+                            ;a bishop then it can definitely attack in the king's direction.
+    jr z, .sliderCanAttack
+
+    jr .squareLoopBreak     ;break if not a bishop
+.sliderCanAttack:
+
+    ld a, (C_CurrentKing)   ;load king position, used in both checkMap and pinMap case
+
+    dec ixh                 ;sets 0 flag if isFriendlyPiece is 1
+    jr z, .isPin
+;( .isCheck ): ;foundFriendlyPiece = 0
+    ;marks every square from king to current square on the current line on checkMap.
+
+.checkMapLoop:
+    add iyl
+
+    ld hl, C_CheckMap
+    ld e, a
+    add hl, de
+    ld (hl), 1
+
+    cp iyh
+    jr nz, .checkMapLoop
+
+    call MoveGen_CountCheck
+
+    jr .squareLoopBreak
+.isPin: ;foundFriendlyPiece = 1
+    ;marks every square from king to current square on the current line on pinMap.
+.pinMapLoop:
+    add iyl
+
+    ld hl, C_PinMap
+    ld e, a
+    add hl, de
+    ld (hl), 1
+
+    cp iyh  ;loop until current target square is reached
+    jr nz, .pinMapLoop
+
+    jr .squareLoopBreak
+.squareLoopContinue:
+    dec b
+    jp nz, .squareLoop
+.squareLoopBreak:
+
+    exx ;alt reg start
+    inc b
+    ld a, b
+
+    ld ixl, 0
+    cp 4    ;calculate isOrthogonal while dirIndex is in A
+    jr nc, .dirIndexGTE4
+    inc ixl ;runs when dirIndex is less than 4, so it's othogonal
+            ;(note ixl = 0 above, so we can increment here)
+.dirIndexGTE4:
+
+    cp c
+    exx ;alt reg end
+    jp nz, .dirLoop
 
     ret
 
@@ -57,7 +252,7 @@ MoveGen_GeneratePinMaps:
 ;
 ;   DE <= $00FFFF
 ;
-; PRESERVES: BC 
+; PRESERVES: NONE, DE will have upper 8 bits zeroed.
 ;
 ;****************************************************************
 ;
@@ -178,32 +373,25 @@ MoveGen_GenerateEnemySlidingAttackMap:
 ;
 ;****************************************************************
 MoveGen_GenerateEnemySlidingAttackMaps:
+    ld de, 0    ;needed for MoveGen_GenerateEnemySlidingAttackMap
+
     ;QUEEN
-    ld hl, (C_EnemyPlPtr)
-    ld de, PIECE_QUEEN * 3
-    add hl, de
-    ld ix, (hl)
-    ld a, (ix + PL_DATA_SIZE)
+    ld ix, (C_EnemyQueenPl)
+    ld a, (C_EnemyQueenCount)
     or a
     ld bc, 0 * 256 + 8
     call nz, MoveGen_GenerateEnemySlidingAttackMap
 
     ;ROOK
-    ld hl, (C_EnemyPlPtr)
-    ld de, PIECE_ROOK * 3
-    add hl, de
-    ld ix, (hl)
-    ld a, (ix + PL_DATA_SIZE)
+    ld ix, (C_EnemyRookPl)
+    ld a, (C_EnemyRookCount)
     or a
     ld bc, 0 * 256 + 4
     call nz, MoveGen_GenerateEnemySlidingAttackMap
 
     ;BISHOP
-    ld hl, (C_EnemyPlPtr)
-    ld de, PIECE_BISHOP * 3
-    add hl, de
-    ld ix, (hl)
-    ld a, (ix + PL_DATA_SIZE)
+    ld ix, (C_EnemyBishopPl)
+    ld a, (C_EnemyBishopCount)
     or a
     ld bc, 4 * 256 + 8
     call nz, MoveGen_GenerateEnemySlidingAttackMap
@@ -471,6 +659,8 @@ MoveGen_Init:
     ld (C_InCheck), a
     ld (C_InDoubleCheck), a
 
+    call Engine_SetIndexVariables
+
     ;clear maps
     ld hl, C_AttackMap
     ld (hl), 0
@@ -513,6 +703,30 @@ MoveGen_Init:
     ld (C_EnemyKing), a
 .noEnemyKing:
 
+    ;load piecelists and number of pieces for enemy queens/rooks/bishops.
+    ;used in attack/check/pin map generation multiple times.
+
+    ld hl, (C_EnemyPlPtr)
+    ld de, PIECE_QUEEN * 3
+    add hl, de
+    ld ix, (hl)
+    ld (C_EnemyQueenPl), ix
+    ld a, (ix + PL_DATA_SIZE)
+    ld (C_EnemyQueenCount), a
+
+    ld de, PIECE_ROOK * 3 - PIECE_QUEEN * 3
+    add hl, de
+    ld ix, (hl)
+    ld (C_EnemyRookPl), ix
+    ld a, (ix + PL_DATA_SIZE)
+    ld (C_EnemyRookCount), a
+
+    ld de, PIECE_BISHOP * 3 - PIECE_ROOK * 3
+    add hl, de
+    ld ix, (hl)
+    ld (C_EnemyBishopPl), ix
+    ld a, (ix + PL_DATA_SIZE)
+    ld (C_EnemyBishopCount), a
 
     ret
 
