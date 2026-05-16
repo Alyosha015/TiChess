@@ -51,10 +51,13 @@ MoveGen_GeneratePinMaps:
 ;
 ; INPUTS:
 ;   IX - selected piece list pointer.
+;   A - number of pieces in piece list.
 ;   B - start direction (0-7)
-;   C - end direction (1-8) (offset by 1)
+;   C - end direction (1-8) (offset by 1, C=8 -> end at 7)
 ;
-; DESTROYS: ALL
+;   DE <= $00FFFF
+;
+; PRESERVES: BC 
 ;
 ;****************************************************************
 ;
@@ -64,6 +67,107 @@ MoveGen_GeneratePinMaps:
 ;
 ;****************************************************************
 MoveGen_GenerateEnemySlidingAttackMap:
+    push bc ;preserve start / end direction
+    exx ;alt reg start
+    ld c, a ;init pieceLoop counter
+    pop de  ;restore start / end direction
+    exx ;alt reg end
+
+.pieceLoop:
+    exx ;alt reg start
+    push de ;preserve start / end direction
+    ld a, d
+    exx ;alt reg end
+
+;registers:
+;   A - temp
+;   B - squares-to-edge squareLoop counter (decrements)
+;   C - target square (in squareLoop)
+;   HL - temp
+;   DE - temp
+;   IX - piecelist pointer
+;   IYL - direction offset
+;   IYH - current dirIndex (copy of D')
+;shadow registers:
+;   B - 
+;   C - piece loop counter (decrements)
+;   D - current direction (increments)
+;   E - max direction
+
+;loops through every possible direction of current sliding piece
+.dirLoop:
+    ;note: register A used to transfer D' (current direction) to E
+    ;A is assumed to have the current direction already stored.
+    ld e, a
+    ld iyh, a
+
+    ;get direction offset
+    ld hl, LUT_DirOffset
+    add hl, de
+    ld e, (hl)
+    ld iyl, e
+
+    ld c, (ix)  ;current piece position (target square)
+
+    ;calculate squares to edge: LUT_SquaresToEdge[square * 8 + dirIndex]
+    ld d, 8
+    ld e, c
+    mlt de  ;DE = square * 8
+
+    ld a, e ;E = E + dirIndex
+    add iyh
+    ld e, a
+
+    ld hl, LUT_SquaresToEdge
+    add hl, de
+    ld b, (hl)
+
+    ld d, 0 ;prepare for using DE as an offset in the loop
+            ;(MLT DE instruction would have effected it above)
+            ;also needed for the outer loops to work with DE properly.
+
+    ld a, b ;skip loop if B = 0 (otherwise DJNZ decrements B and overflows to B = 255)
+    or a
+    jr z, .squareLoopBreak
+
+.squareLoop:
+    ld a, c ;calculate next target square (square += dirOffset), load to DE
+    add iyl
+    ld c, a
+    ld e, a
+
+    ld hl, C_AttackMap  ;mark square on attack map
+    add hl, de
+    ld (hl), 1
+
+    ;early return from loop if there's a target piece in the way and it's not the king.
+    ld hl, C_CurrentKing    ;check if A (has target square from above code) matches the
+    cp (hl)                 ;current king's position, in which case continue looping.
+    jr z, .squareLoopContinue
+
+    ;if this king isn't there, check if another piece is in the way
+    ld hl, C_Board          ;get target piece
+    add hl, de
+    ld a, (hl)
+    or a                    ;since PIECE_NONE = 0
+    jr nz, .squareLoopBreak
+.squareLoopContinue:
+    djnz .squareLoop
+.squareLoopBreak:
+
+    exx ;alt reg start
+    inc d
+    ld a, d ;doubles as loading A = dirIndex for next loop
+    cp e
+    exx ;alt reg end
+    jr nz, .dirLoop
+
+    inc ix  ;increment pointer to next piece in PL
+    exx ;alt reg start
+    pop de  ;restore start / end direction (if loop exits stack will be clear aswell)
+    dec c
+    exx ;alt reg end
+    jr nz, .pieceLoop
 
     ret
 

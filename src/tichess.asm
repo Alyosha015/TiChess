@@ -40,7 +40,9 @@
 
     include "chess/movegen.asm"
 
+    ;debug
     include "chess/test/dbg_move_generator.asm"
+    include "debug/dbg_vars.asm"
 
 ;read only data
     include "data/font.asm"

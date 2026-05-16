@@ -20,17 +20,14 @@ GameInit:
 
     ; call BUI_DrawBoardForce
 
-    call LCD_Clear
+    ; call LCD_Clear
     call MoveGen_Generate
     call Debug_PrintBoardMaps
 
-    ; ld a, (C_EnemyKing)
-    ; ld (TestStr), a
-
     ; ld bc, 0
-    ; ld de, 0
+    ; ld de, 128
     ; ld hl, COLOR_WHITE * 256 + COLOR_TRANSPARENT
-    ; ld iy, TestStr
+    ; ld iy, DEBUG_OUT_STR
     ; call GFX_DrawTextLarge
 
     call LCD_Swap
@@ -64,6 +61,3 @@ GameTick:
     call nz, GameExit
 
     ret
-
-TestStr:
-    db ".",0
