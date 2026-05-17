@@ -1,6 +1,11 @@
 MG_KING_NONE := 255
 
-C_CurrentKing: db 0     ;stores positions of kings
+MG_Moves: dl 0          ;stores pointer to move-list
+MG_MovesNext: dl 0      ;stores pointer to next empty 3 byte cell in move-list,
+                        ;stored in MG_Moves. Simplifies adding next move.
+MG_MoveCount: db 0      ;tracks number of moves added to move-list
+
+C_CurrentKing: db 0     ;stores positions of kings (MG_KING_NONE if there's no king)
 C_EnemyKing: db 0
 
 C_InCheck: db 0
@@ -32,6 +37,42 @@ MoveGen_CountCheck:
 
     ld a, 1
     ld (C_InCheck), a
+
+    ret
+
+;****************************************************************
+; MoveGen_AddMove - (internal) adds move to movelist.
+;
+; INPUT:
+;   D - start square of move
+;   E - end square of move
+;
+; DESTROYS: HL, A
+;****************************************************************
+MoveGen_AddMove:
+    xor a
+;****************************************************************
+; MoveGen_AddMove - (internal) adds move to movelist with flag.
+;
+; INPUT:
+;   A - flag
+;   D - start square of move
+;   E - end square of move
+;
+; DESTROYS: HL, A
+;****************************************************************
+MoveGen_AddMoveFlag:
+    ld hl, MG_MoveCount
+    inc (hl)
+
+    ld hl, (MG_MovesNext)
+    ld (hl), e
+    inc hl
+    ld (hl), d
+    inc hl
+    ld (hl), a
+    inc hl
+    ld (MG_MovesNext), hl
 
     ret
 
@@ -183,39 +224,41 @@ MoveGen_GeneratePinMaps:
     jr .squareLoopBreak     ;break if not a bishop
 .sliderCanAttack:
 
+    ;put offset DE into IYL, so HL holding map can be stepped through directly.
+    ;since the offset can be a negative number, DE will be converted to this by
+    ;setting the upper bits to all 1's, making it the equivalent negative number
+    ;when IYL is copied in E.
+    ld a, iyl
+    and 1000_0000b  ;check for sign bit
+    jr z, .directionOffsetIsPositive
+;( .directionOffsetIsNegative: )
+    ld de, $FFFFFF
+.directionOffsetIsPositive:
+    ld e, iyl
+
     ld a, (C_CurrentKing)   ;load king position, used in both checkMap and pinMap case
+
+    ld hl, C_PinMap
 
     dec ixh                 ;sets 0 flag if isFriendlyPiece is 1
     jr z, .isPin
-;( .isCheck ): ;foundFriendlyPiece = 0
-    ;marks every square from king to current square on the current line on checkMap.
-
-.checkMapLoop:
-    add iyl
-
+;( .isCheck ):  ;foundFriendlyPiece = 0
     ld hl, C_CheckMap
-    ld e, a
+.isPin:         ;foundFriendlyPiece = 1
+    ld b, 0     ;offset HL to king's position. Note that BC can be overwritten since
+                ;the squareLoop breaks right after this check/pinmap is marked.
+    ld c, a
+    add hl, bc
+
+    ;marks every square from king to current square on the current line on selected map.
+.mapLoop:
+    add iyl ;A tracks target square for the mapLoop, loaded with king position above
+
     add hl, de
     ld (hl), 1
 
-    cp iyh
-    jr nz, .checkMapLoop
-
-    call MoveGen_CountCheck
-
-    jr .squareLoopBreak
-.isPin: ;foundFriendlyPiece = 1
-    ;marks every square from king to current square on the current line on pinMap.
-.pinMapLoop:
-    add iyl
-
-    ld hl, C_PinMap
-    ld e, a
-    add hl, de
-    ld (hl), 1
-
-    cp iyh  ;loop until current target square is reached
-    jr nz, .pinMapLoop
+    cp iyh  ;loop until current target square (found in squareLoop) is reached
+    jr nz, .mapLoop
 
     jr .squareLoopBreak
 .squareLoopContinue:
@@ -549,9 +592,6 @@ MoveGen_GenerateEnemyKingAttackMap:
 ;
 ; DESTROYS: All
 ;****************************************************************
-; The main purpose of this is for later allowing legal king
-; movement.
-;****************************************************************
 MoveGen_GenerateAttackMaps:
     ld a, (C_CurrentKing)
     cp MG_KING_NONE
@@ -583,8 +623,9 @@ MoveGen_GenerateKingMoves:
     ret
 
 ;****************************************************************
-; MoveGen_GenerateSlidingMoves - (internal) moves for
-;   queen / rook / bishop.
+; MoveGen_GenerateSlidingMoves - (internal) Used to create moves
+;   for sliding pieces, with input for range of directions to check
+;   to make it work for bishop/rook/queen movement.
 ;
 ; INPUTS:
 ;   IX - selected piece list pointer.
@@ -594,12 +635,17 @@ MoveGen_GenerateKingMoves:
 ; DESTROYS: ALL
 ;
 ;****************************************************************
-;
-; Used to create moves for sliding pieces, with controls for what
-; directions to check to make it work for bishop/rook/queen movement.
-;
-;****************************************************************
 MoveGen_GenerateSlidingMoves:
+
+    ret
+
+;****************************************************************
+; MoveGen_GenerateAllSlidingMoves - (internal) generates moves
+;   for all sliding-type pieces.
+;
+; DESTROYS: ALL
+;****************************************************************
+MoveGen_GenerateAllSlidingMoves:
 
     ret
 
@@ -609,6 +655,95 @@ MoveGen_GenerateSlidingMoves:
 ; DESTROYS: ALL
 ;****************************************************************
 MoveGen_GenerateKnightMoves:
+    ld hl, (C_CurrentPlPtr)
+    ld de, PIECE_KNIGHT * 3
+    add hl, de
+    ld ix, (hl)
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ret z       ;early return if there are 0 knights
+
+    exx ;alt reg start
+    ld b, a ;load knight loop counter
+    exx ;alt reg end
+
+    ;registers:
+    ;   B - knight move count (moveLoop counter, decrements)
+    ;   C - knight position
+    ;   DE - temp
+    ;   HL - temp
+    ;   IX - knight piece list
+    ;   IY - knight moves LUT
+    ;shadow registers:
+    ;   B - number of knights (knightLoop counter, decrements)
+    ;   C - 
+
+.knightLoop:
+    ld c, (ix)      ;load next knight
+    inc ix
+
+    ld hl, C_PinMap ;if the knight's position is marked on the pinmap,
+    ld e, c         ;it doesn't have legal moves and can be skipped.
+    add hl, de
+    ld a, (hl)
+    or a
+    jr nz, .knightLoopContinue
+
+    ;lookup number of moves
+    ld hl, LUT_KnightMoveCount
+    add hl, de
+    ld b, (hl)
+
+    ;first index of move LUT to IY
+    ld d, 8 ;note that e already has knight position from accessing LUT_KnightMoveCount
+    mlt de
+    ld iy, LUT_KnightMovement
+    add iy, de
+
+    ld d, 0 ;clear DE since the multiply instruction can affect D.
+
+.moveLoop:
+    ld e, (iy)      ;load move destination square
+    inc iy
+
+    ld hl, C_Board  ;note dest. square is already in DE
+    add hl, de
+    ld a, (hl)      ;target piece
+
+    or a                    ;can proceed if square is empty (PIECE_NONE = 0)
+    jr z, .addMoveCheckTest
+
+    and MASK_PIECE_COLOR    ;can proceed if square has enemy piece
+    ld hl, C_EnemyColor
+    cp (hl)
+    jr nz, .moveLoopContinue
+.addMoveCheckTest:
+    ;continue if the king is in check and the dest. square isn't marked on the check map
+    ;this means that moving there won't eliminate the check, so it's an illegal move.
+
+    ld a, (C_InCheck)
+    or a
+    jr z, .skipCheckTest
+
+    ld hl, C_CheckMap
+    add hl, de
+    ld a, (hl)
+    or a
+    jr z, .moveLoopContinue
+.skipCheckTest:
+
+    ld d, c
+    call MoveGen_AddMove
+    ld d, 0 ;reset to use DE for indexing on subsequent loops.
+
+.moveLoopContinue:
+    djnz .moveLoop
+
+.knightLoopContinue:
+    exx ;alt reg start
+    dec b
+    exx ;alt reg end
+    jr nz, .knightLoop
 
     ret
 
@@ -658,6 +793,7 @@ MoveGen_Init:
     xor a
     ld (C_InCheck), a
     ld (C_InDoubleCheck), a
+    ld (MG_MoveCount), a
 
     call Engine_SetIndexVariables
 
@@ -740,6 +876,9 @@ MoveGen_Init:
 ; DESTROYS: All
 ;****************************************************************
 MoveGen_Generate:
+    ld (MG_Moves), ix
+    ld (MG_MovesNext), ix
+
     call MoveGen_Init
 
     call MoveGen_GenerateAttackMaps
@@ -755,6 +894,10 @@ MoveGen_Generate:
     dec a
     ret z
 
-    
+    call MoveGen_GenerateAllSlidingMoves
+
+    call MoveGen_GenerateKnightMoves
+
+    call MoveGen_GeneratePawnMoves
 
     ret

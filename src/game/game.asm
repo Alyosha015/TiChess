@@ -21,8 +21,12 @@ GameInit:
     ; call BUI_DrawBoardForce
 
     ; call LCD_Clear
+    ld ix, _temp_Moves
     call MoveGen_Generate
     call Debug_PrintBoardMaps
+
+    ld a, (MG_MoveCount)
+    call Debug_PrintRegA
 
     ; ld bc, 0
     ; ld de, 128
@@ -61,3 +65,5 @@ GameTick:
     call nz, GameExit
 
     ret
+
+_temp_Moves: rb 1000
