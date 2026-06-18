@@ -76,6 +76,40 @@ MoveGen_AddMoveFlag:
 
     ret
 
+;****************************************************************
+; MoveGen_MovingOnRay - (internal) used for checking if a square
+;   and direction form a ray away from the current king's square.
+;   This is generaly used to determine if a piece is moving along
+;   a pin-ray during sliding move generation, and similary for
+;   pawn captures.
+;
+; INPUT:
+;   IYH - piece's square
+;   IYL - dirOffset
+;
+; OUTPUT:
+;   Sets Z flag if true.
+;
+; DESTROYS: A, HL, DE
+;****************************************************************
+MoveGen_MovingOnRay:
+    ld a, (C_CurrentKing)   ;LUT_SquareToSquareDir is indexed by [63 + square - raySource]
+    neg                     ;raySource is the king's position.
+    add 63
+    add iyh
+
+    ld hl, LUT_SquareToSquareDir
+    ld e, a
+    add hl, de
+
+    ld a, (hl)              ;now, we check if the direction matches the moveOffset
+    cp iyl                  ;(or it's negative, since that's parallel)
+    ret z
+
+    neg                     ;check negative
+    cp iyl
+    ret
+
 ; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 ; SECTION: ENEMY'S PERSEPECTIVE ATTACK/CHECK/PIN MAP GENERATION
 ; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
@@ -628,14 +662,197 @@ MoveGen_GenerateKingMoves:
 ;   to make it work for bishop/rook/queen movement.
 ;
 ; INPUTS:
-;   IX - selected piece list pointer.
+;   IX - selected piecelist pointer.
+;   A - number of pieces in piecelist.
 ;   B - start direction (0-7)
 ;   C - end direction (1-8) (offset by 1)
+;
+;   DE = $0000XX
 ;
 ; DESTROYS: ALL
 ;
 ;****************************************************************
 MoveGen_GenerateSlidingMoves:
+    push bc ;preserve start / end direction
+    exx ;alt reg start
+    ld c, a ;init pieceLoop counter
+    pop de  ;restore start / end direction
+    lea hl, ix
+    exx ;alt reg end
+
+    ;registers:
+    ;   B - squares-to-edge (squareLoop, decrement)
+    ;   C - target piece
+    ;   DE - temp
+    ;   HL - temp
+    ;   IXL - 
+    ;   IXH - pin-ray direction (pinned if != 0)
+    ;   IYL - dirOffset
+    ;   IYH - square (piece position)
+    ;shadow registers:
+    ;   B - 
+    ;   C - piece loop counter (decrements)
+    ;   D - current direction (increments)
+    ;   E - max direction
+    ;   HL - piecelist pointer
+
+.pieceLoop:
+    exx ;alt reg start
+    push de ;preserve start / end direction
+    ld a, d
+    exx ;alt reg end
+
+    exx ;alt reg start
+    ld a, (hl)  ;get piece position
+    inc hl
+    exx ;alt reg end
+    ld iyh, a   ;save piece position
+
+    ld ixh, 0   ;init pin-ray direction (which also doubles as a isPinned variable)
+
+    ;if the king is in check and this piece is pinned, it can be skipped.
+    ld e, a
+    ld hl, C_PinMap
+    add hl, de
+    ld a, (hl)
+    or a
+    jr z, .pieceSquareNotPinned
+
+    ld a, (C_InCheck)   ;this only runs if pinned, so if the king is in check we know
+    or a                ;this piece doesn't have any legal moves since moving it to
+                        ;block the check would open another attack line on the king.
+    jp nz, .pieceLoopContinue
+
+    ;this will be needed later to determine if the sliding piece's direction matches the direction
+    ;of the pin-ray it is on with the king, which would limit it's legal moves.
+    ld a, (C_CurrentKing)   ;LUT_SquareToSquareDir is indexed by [63 + square - raySource]
+    neg                     ;raySource is the king's position.
+    add 63
+    add iyh
+
+    ld hl, LUT_SquareToSquareDir
+    ld e, a
+    add hl, de
+    ld a, (hl)
+    ld ixh, a
+
+.pieceSquareNotPinned:
+
+    exx ;alt reg start
+    ld a, d     ;load current direction index
+    exx ;alt reg end
+.dirLoop:       ;note: expects current dirIndex in A
+    ;lookup dirOffset
+    ld e, a
+    ld b, a     ;save dirIndex to temp B variable for now
+
+    ;registers:
+    ;   B - dirIndex
+
+    ld hl, LUT_DirOffset
+    add hl, de
+    ld a, (hl)
+    ld iyl, a
+
+    ;if this square is pinned and not moving along the pin-ray's direction,
+    ;then we can skip checking this direction.
+    ld a, ixh
+    or a
+    jr z, .squareNotPinned
+
+    ;we check the negative dirOffset as well, since those are parallel
+    ;to each other (one could be a rook moving away from a king, and
+    ;the negative a rook moving toward a king)
+    cp iyl
+    jr z, .dirLoopContinue
+
+    neg
+    cp iyl
+    jr z, .dirLoopContinue
+.squareNotPinned:
+    ;note that IXH is not needed in the dirLoop and squareLoop beyond here.
+
+    ;lookup squares-to-edge
+    ld hl, LUT_SquaresToEdge
+    ld d, 8
+    ld e, iyh
+    mlt de
+    ld a, b     ;dirIndex
+    add e
+    ld e, a
+    add hl, de
+    ld b, (hl)
+    ld d, 0
+
+    ld a, iyh   ;init target square
+    ld ixh, a
+.squareLoop:
+    ld a, ixh
+    add iyl
+    ld ixh, a
+
+    ld hl, C_Board  ;load target piece
+    ld e, ixh
+    add hl, de
+    ld c, (hl)
+
+    ;break squareLoop if target piece is friendly
+    ld a, c
+    or a
+    jr z, .targetSquareEmpty    ;(PIECE_NONE = 0)
+    and MASK_PIECE_COLOR
+    ld hl, C_CurrentColor
+    cp (hl)
+    jr z, .squareLoopBreak
+.targetSquareEmpty:
+
+    ld a, (C_InCheck)   ;only add the piece after passing a check test 
+                        ;(if inCheck the target square is marked on the check map)
+    or a
+    jr z, .skipInCheckTest
+
+    ld hl, C_CheckMap
+    add hl, de  ;note that DE still have target square as the offset 
+                ;from accessing C_Board.
+    ld a, (hl)
+    or a
+    jr z, .checkTestFail
+.skipInCheckTest:
+;( .checkTestPass: )
+
+    ld d, iyh
+    ld a, e
+    call Debug_PrintRegA
+    call MoveGen_AddMove    ;note that E already has the target square
+    ld d, 0
+
+.checkTestFail:
+
+    ;break if this was a capture move, since that limits how
+    ;many squares the sliding piece can move in this direction.
+    ld a, c
+    or a
+    jr nz, .squareLoopBreak
+
+    djnz .squareLoop
+.squareLoopBreak:
+
+.dirLoopContinue:
+    exx ;alt reg start
+    inc d
+    ld a, d ;also acts as loading A = dirIndex for next loop
+    cp e
+    exx ;alt reg end
+    jr nz, .dirLoop
+.dirLoopBreak:
+
+.pieceLoopContinue:
+    exx ;alt reg start
+    inc hl  ;increment pointer to next piece in PL
+    pop de  ;restore start / end direction (if loop exits stack will be clear aswell)
+    dec c
+    exx ;alt reg end
+    jp nz, .pieceLoop    
 
     ret
 
@@ -646,6 +863,32 @@ MoveGen_GenerateSlidingMoves:
 ; DESTROYS: ALL
 ;****************************************************************
 MoveGen_GenerateAllSlidingMoves:
+    ld hl, (C_CurrentPlPtr)
+    ld de, PIECE_QUEEN * 3
+    add hl, de
+    ld ix, (hl)
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ld bc, 0 * 256 + 8
+    call nz, MoveGen_GenerateSlidingMoves
+
+    ld hl, (C_CurrentPlPtr)
+    ld de, PIECE_ROOK * 3
+    add hl, de
+    ld ix, (hl)
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ld bc, 0 * 256 + 4
+    call nz, MoveGen_GenerateSlidingMoves
+
+    ld hl, (C_CurrentPlPtr)
+    ld de, PIECE_BISHOP * 3
+    add hl, de
+    ld ix, (hl)
+    ld a, (ix + PL_DATA_SIZE)
+    or a
+    ld bc, 4 * 256 + 8
+    call nz, MoveGen_GenerateSlidingMoves
 
     ret
 
@@ -676,7 +919,7 @@ MoveGen_GenerateKnightMoves:
     ;   IY - knight moves LUT
     ;shadow registers:
     ;   B - number of knights (knightLoop counter, decrements)
-    ;   C - 
+    ;   C - n/a
 
 .knightLoop:
     ld c, (ix)      ;load next knight

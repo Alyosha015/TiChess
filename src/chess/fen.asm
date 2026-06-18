@@ -5,6 +5,7 @@
 ;****************************************************************
 
 FEN_StartPosition:
+    db "3r1k2/8/71/8/3R4/8/8/3K4 w - - 0 1", 0
     ; db "r3k3/1p3p2/p2q2p1/bn3P2/1N2PQP1/PB6/3K1R1r/3R4 w - - 0 1", 0 ; attack / pin / check map test
     db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0
 
