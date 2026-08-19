@@ -5,10 +5,10 @@ DEBUG_PRINT_MAP_CHAR_0: db '.', 0
 ;****************************************************************
 ; Debug_PrintBoardMaps - display attack / check / pin maps.
 ;
-; DESTROYS: NONE
+; DESTROYS: None
 ;****************************************************************
 Debug_PrintBoardMaps:
-    pushall
+    pushallexx
 
     ld iy, DEBUG_PRINT_MAP_LABEL
     ld bc, 8
@@ -28,7 +28,7 @@ Debug_PrintBoardMaps:
     ld bc, 24 * 320 + 8 + 80 * 2 ; (168, 24)
     call Debug_PrintMap
 
-    popall
+    popallexx
     ret
 
 DEBUG_PRINT_MAP_VRAM: dl 0
@@ -39,11 +39,11 @@ DEBUG_PRINT_SQUARE_COUNTER: db 0
 ; Debug_PrintMap - (internal) draws 64 byte move generator map,
 ;   used by Debug_PrintBoardMaps.
 ;
-; INPUTS:
+; INPUT:
 ;   IX - map pointer
 ;   BC - top left corner vram coordinates
 ;
-; DESTROYS: ALL
+; DESTROYS: All
 ;****************************************************************
 Debug_PrintMap:
     ld (DEBUG_PRINT_MAP_VRAM), bc
@@ -64,8 +64,8 @@ Debug_PrintMap:
     ;the vram position is modified in the case that a '.' is drawn.
     ld hl, (DEBUG_PRINT_MAP_VRAM)   ;prepare vram position for drawing point
     ld iy, DEBUG_PRINT_MAP_CHAR_1
-    dec a
-    jr z, .squareIs1
+    or a
+    jr nz, .squareIs1
 .squareIs0:
     ld iy, DEBUG_PRINT_MAP_CHAR_0
     ld de, -(320 * 4) + (2)        ;move up vram position 4 and right 4 if '.'

@@ -49,7 +49,9 @@ PL_LUT_BLACK_SIZE := 3 + 3*6 + 3
 PL_LUT_WHITE_SIZE := 3 + 3*6
 
 ;****************************************************************
-; PL_Init - Creates LUT table for piecelists.
+; PL_Init - Creates LUT table for piecelists. Only call once.
+;
+; DESTROYS: All non-shadow registers.
 ;****************************************************************
 PL_Init:
     ld ix, PL_Data
@@ -63,15 +65,15 @@ PL_Init:
     ret
 
 ;****************************************************************
-; _PL_InitSideLUT - used to create piecelist lut for one color of
-;   pieces.
+; _PL_InitSideLUT - (internal) Used to create piecelist lut for
+;   one color of pieces.
 ;
-; INPUTS:
+; INPUT:
 ;   IX - piecelist data start address
 ;   IY - LUT first entry start address
 ;
 ; DESTROYS:
-;   IX, IY, A
+;   IX, IY, DE, BC, A
 ;
 ;****************************************************************
 _PL_InitSideLUT:
@@ -91,12 +93,9 @@ _PL_InitSideLUT:
     ret
 
 ;****************************************************************
-; PL_ResetAll - Zeros all 12 pieclists.
+; PL_ResetAll - Zeros all piecelists.
 ;
-; INPUTS: NONE
-;
-; DESTROYS: NONE
-;
+; DESTROYS: None
 ;****************************************************************
 PL_ResetAll:
     push bc ;preserve registers
@@ -118,13 +117,13 @@ PL_ResetAll:
 ;****************************************************************
 ; PL_Add - Add piece to selected square of piecelist.
 ;
-; INPUTS:
+; INPUT:
 ;   IX - piecelist
 ;   DE - board index for piece
 ;
 ; DESTROYS:
 ;   IX, HL, DE, BC
-;
+;   DE, BC = $0000XX
 ;****************************************************************
 PL_Add:
     ; data[count] = square
@@ -148,13 +147,13 @@ PL_Add:
 ;****************************************************************
 ; PL_Remove - Remove piece at selected square of piecelist.
 ;
-; INPUTS:
+; INPUT:
 ;   IX - piecelist
 ;   DE - board index to remove
 ;
 ; DESTROYS:
 ;   IX, IY, HL, DE, BC
-;
+;   DE, BC = $0000XX
 ;****************************************************************
 PL_Remove:
     ; index = lookup[square]
@@ -188,14 +187,14 @@ PL_Remove:
 ;****************************************************************
 ; PL_Move - Updates position of piece.
 ;
-; INPUTS:
+; INPUT:
 ;   IX - piecelist
 ;   DE - position
 ;   BC - new position
 ;
 ; DESTROYS:
 ;   IX, IY, HL, DE, BC
-;
+;   DE, BC = $0000XX
 ;****************************************************************
 PL_Move:
     ; index = lookup[start]

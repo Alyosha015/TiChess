@@ -1,7 +1,7 @@
 ;****************************************************************
 ;
 ; Central place for most of the variables used by the game,
-; *the chess engine will have a similar file. Note that some of
+; the chess engine will have a similar file. Note that some of
 ; these are memory mapped to src/memory.asm values.
 ;
 ;****************************************************************

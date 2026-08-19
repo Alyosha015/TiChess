@@ -1,5 +1,5 @@
 ;****************************************************************
-; GameInit - intilizing ui, timers, etc
+; GameInit - Intilizing ui, timers, engine, etc.
 ;****************************************************************
 GameInit:
 ;Ui
@@ -9,7 +9,7 @@ GameInit:
 ;Chess Engine
     call Engine_Init
     ld ix, FEN_StartPosition
-    call FEN_Load
+    call Engine_Load
 
 ;Logic
     call TimerDisable
@@ -17,29 +17,27 @@ GameInit:
     call TimerEnable
 
 ;scratchpad
+    ;ld a, PERSPECTIVE_BLACK
+    ;ld (bui_Perspective), a
 
-    ; call BUI_DrawBoardForce
+    ;call BUI_DrawBoardForce
 
-    ; call LCD_Clear
-    ld ix, _temp_Moves
-    call MoveGen_Generate
-    call Debug_PrintBoardMaps
+    ld a, 4
+    call Perft_RunTestSuite
 
-    ld a, (MG_MoveCount)
-    call Debug_PrintRegA
+    ld ix, PERFT_POSITION_012
+    ld iy, PERFT_EXPECTED_012
+    ld a, 3
+    ;call Perft_RunTest
 
-    ; ld bc, 0
-    ; ld de, 128
-    ; ld hl, COLOR_WHITE * 256 + COLOR_TRANSPARENT
-    ; ld iy, DEBUG_OUT_STR
-    ; call GFX_DrawTextLarge
+    ;call BUI_DrawBoardForce
 
     call LCD_Swap
 
     ret
 
 ;****************************************************************
-; GameExit - call to properly exit program
+; GameExit - Call to properly exit program.
 ;****************************************************************
 GameExit:
 
@@ -47,15 +45,8 @@ GameExit:
 
     ret
 
-    GAME_UI_TITLE := 0
-    GAME_UI_MAIN := 1
-
-game_state: db GAME_UI_MAIN
-
-game_CallTable:
-
 ;****************************************************************
-; GameTick - all game logic and rendering happens from here
+; GameTick - All game logic and rendering.
 ;****************************************************************
 GameTick:
     
@@ -67,3 +58,4 @@ GameTick:
     ret
 
 _temp_Moves: rb 1000
+FEN_TEMP: db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1", 0

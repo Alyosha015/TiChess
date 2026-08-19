@@ -1,17 +1,15 @@
 ;****************************************************************
 ; GFX_FillRectangle - Draw filled rectangle.
-;   DON'T use with 0 for width / height.
+;   Do not use with 0 for width / height.
 ;
-; INPUTS:
+; INPUT:
 ;   BC  = X coordinate
 ;   DE  = Y coordinate
 ;   H   = Width
 ;   L   = Height
 ;   A   = Color
 ;
-; PRESERVES:
-;   A, B', HL'
-;
+; PRESERVES: A, B', HL'
 ;****************************************************************
 GFX_FillRectangle:
     ;register data:
@@ -80,19 +78,16 @@ GFX_FillRectangle:
     ret
 
 ;****************************************************************
-; GFX_DrawRectangle - Draw rectangle with 1 pixel
-;   border
+; GFX_DrawRectangle - Draw rectangle with 1 pixel border.
 ;
-; INPUTS:
+; INPUT:
 ;   BC  = X coordinate
 ;   DE  = Y coordinate
 ;   H   = Width
 ;   L   = Height
 ;   A   = Color
 ;
-; PRESERVES:
-;   A, Shadow Registers
-;
+; PRESERVES: A, Shadow Registers
 ;****************************************************************
 GFX_DrawRectangle:
     ;register data:

@@ -14,16 +14,14 @@
 ;****************************************************************
 ; GFX_Sprite1BppFast - GFX_Sprite1Bpp but without XY coordinate -> VRAM calculation.
 ;
-; INPUTS:
+; INPUT:
 ;   IX  = Sprite Data Pointer
 ;   BC  = n/a
 ;   D   = Foreground Color
 ;   E   = Background Color
 ;   HL  = VRAM Offset (320 * x + y)
 ;
-; PRESERVES:
-;   NONE
-;
+; DESTROYS: All
 ;****************************************************************
 GFX_Sprite1BppFast:
     ld a, (ix+1) ;early return if 0 height (such as the space character)
@@ -37,16 +35,14 @@ GFX_Sprite1BppFast:
 ;****************************************************************
 ; GFX_Sprite1Bpp - Draw sprite in 1bbp format.
 ;
-; INPUTS:
+; INPUT:
 ;   IX  = Sprite Data Pointer
 ;   BC  = X coordinate
 ;   DE  = Y coordinate
 ;   H   = Foreground Color
 ;   L   = Background Color
 ;
-; PRESERVES:
-;   NONE
-;
+; DESTROYS: All
 ;****************************************************************
 GFX_Sprite1Bpp:
     ;register data:

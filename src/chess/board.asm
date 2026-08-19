@@ -1,944 +1,659 @@
-;handles board representation, loading, and make / unmake move functions
+;****************************************************************
+;
+; Subroutines for making and undoing moves on the engine's chess
+; board and updating all required state variables.
+;
+;****************************************************************
 
-    EP_NONE := 15
-    WHITE_KING_CASTLE := 0001b
-    WHITE_QUEEN_CASTLE := 0010b
-    BLACK_KING_CASTLE := 0100b
-    BLACK_QUEEN_CASTLE := 1000b
+BOARD_STATE_STACK_SIZE := 3 * 64
 
-    MASK_REMOVE_WHITE_CASTLE := 1100b
-    MASK_REMOVE_BLACK_CASTLE := 0011b
+_B_StateStackPtr: dl 0
 
-_rank: db 0
-_file: db 0
+_B_Move:                    ;this label is used to set the 3 bytes below
+    _B_Move_Start: db 0     ;from a single register storing a move.
+    _B_Move_End: db 0       ;don't change their order.
+    _B_Move_Flag: db 0
 
-;******** Board State ********
-whiteToMove: db 0
+_B_MovingPiece: db 0
+_B_MovingType: db 0
 
-;note: don't change order of next 4 below, BoardSetIndexVars expects them like this
-currentIndex: db 0  ;white=1, black=0
-currentColor: db 0  ;white=8, black=0
-enemyIndex: db 0
-enemyColor: db 0
+;note that _B_CapturedPiece is in variables.asm
+_B_CapturedType: db 0
 
-;used for state
-castleFlags: db 0
-epFile: db 0
-capturedPiece: db 0
 
-;96 B - 32 entries max at 3B / entry
-;state format:
-;   sp-3 - captured piece
-;   sp-2 - ep file
-;   sp-1 - castle flags
-board_StateStack: rb 96
-board_StateSp: db 0
+;****************************************************************
+; Board_PushBoardState - (internal) Push current game state on stack.
+;
+; DESTROYS: HL, DE
+;****************************************************************
+Board_PushBoardState:
+    ld de, (B_BoardState)   ;push value
+    ld hl, (_B_StateStackPtr)
+    ld (hl), de
 
-;board representation
-pieces: rb 64
+    inc hl                  ;update stack pointer
+    inc hl
+    inc hl
 
-board_move:
-b_move_s: db 0
-b_move_e: db 0
-b_move_f: db 0
+    ld (_B_StateStackPtr), hl
 
-movingPiece: db 0
-movingType: db 0
-capturedType: db 0
-
-;not to be confused with movegenerator equivalents
-b_currentPlPtr: dl 0
-b_enemyPlPtr: dl 0
-
-;doesn't preserve BC, DE, HL, IX
-board_LoadPlPtrs:
-    ld bc, plTableWhite
-    ld de, plTableBlack
-    ld hl, b_currentPlPtr
-    ld ix, b_enemyPlPtr
-
-    ld a, (whiteToMove)
-    cp 1
-    jp z, .skipBlackMove
-
-    ld de, plTableWhite
-    ld bc, plTableBlack
-.skipBlackMove:
-    ld (hl), bc
-    ld (ix), de
     ret
 
-;expects move in BC. Preserves no registers.
-board_MakeMove:
+;****************************************************************
+; Board_PopBoardState - (internal) Pop current game state from stack.
+;
+; DESTROYS: HL
+;****************************************************************
+Board_PopBoardState:
+    ld hl, (_B_StateStackPtr)
+    dec hl                  ;update stack pointer
+    dec hl
+    dec hl
+    ld (_B_StateStackPtr), hl
+
+    ld hl, (hl)             ;pop value
+    ld (B_BoardState), hl
+
+    ret
+
+;****************************************************************
+; Board_RemoveRookCastlingRights - (internal) Used to update
+;   C_CastleFlags.
+;
+; INPUT:
+;   A - Rook's square index.
+;
+; DESTROYS: A, IXL
+;****************************************************************
+Board_RemoveRookCastlingRights:
+    or a
+    jr z, .rook0
+    cp 7
+    jr z, .rook7
+    cp 56
+    jr z, .rook56
+    cp 63
+    jr z, .rook63
+
+    ret                     ;early return if rook isn't in other positions
+
+.rook0:                     ;white queenside castle
+    ld ixl, not CASTLE_FLAG_WHITE_QUEEN
+    jr .finish
+.rook7:                     ;white kingside castle
+    ld ixl, not CASTLE_FLAG_WHITE_KING
+    jr .finish
+.rook56:                    ;black queenside castle
+    ld ixl, not CASTLE_FLAG_BLACK_QUEEN
+    jr .finish
+.rook63:                    ;black kingside castle
+    ld ixl, not CASTLE_FLAG_BLACK_KING
+.finish:
+
+    ld a, (C_CastleFlags)
+    and ixl
+    ld (C_CastleFlags), a
+
+    ret
+
+;****************************************************************
+; Board_MakeMove - Make move on board. Note that this assumes
+;   that the variables set by Engine_SetPieceListVariables 
+;   and Engine_SetIndexVariables are already set.
+;
+; INPUT:
+;   BC - move
+;
+; DESTROYS: All
+;****************************************************************
+Board_MakeMove:
+    ld (_B_Move), bc
+    ld de, 0
+    ld bc, 0
+
     ;registers:
     ;   BC - temp
     ;   DE - temp
     ;   HL - temp
-    ;   IX - piecelist (sometimes)
-    ;   IYH - move start
-    ;   IYL - move end
-    ld (board_move), bc
+    ;   IX - reserved for storing piecelists
+    ;   IYL - move start
+    ;   IYH - move end
 
-    call board_LoadPlPtrs
-
-    ld bc, 0
-    ld de, 0
-
-    ld a, (b_move_s)
-    ld (LastMoveSource), a ;used for animation (boardui.asm)
-    ld iyh, a
-    ld a, (b_move_e)
-    ld (LastMoveDest), a ;used for animation
+    ld a, (_B_Move_Start)
     ld iyl, a
+    ld a, (_B_Move_End)
+    ld iyh, a
 
-    ld hl, pieces ;get moving piece type
-    ld e, iyh
-    add hl, de
-    ld a, (hl)
-    ld (movingPiece), a
-    and MASK_PIECE_TYPE
-    ld (movingType), a
-
-    ld hl, pieces ;get captured piece / type
+    ld hl, C_Board          ;load moving and captured pieces
     ld e, iyl
     add hl, de
     ld a, (hl)
-    ld (capturedPiece), a
+    ld (_B_MovingPiece), a
     and MASK_PIECE_TYPE
-    ld (capturedType), a
+    ld (_B_MovingType), a
 
-    ;push state
-    ld hl, board_StateStack
-    ld a, (board_StateSp)
-    ld e, a
-    add 3
-    ld (board_StateSp), a
+    ld hl, C_Board
+    ld e, iyh
     add hl, de
-    ld a, (capturedPiece)
-    ld (hl), a
-    inc hl
-    ld a, (epFile)
-    ld (hl), a
-    inc hl
-    ld a, (castleFlags)
-    ld (hl), a
+    ld a, (hl)
+    ld (_B_CapturedPiece), a
+    and MASK_PIECE_TYPE
+    ld (_B_CapturedType), a
 
-    ;reset epFile
-    ld a, EP_NONE
-    ld (epFile), a
+    call Board_PushBoardState
+    ld de, 0
 
-    ;remove captured piece
-    ld a, (capturedType)
-    cp 0
-    jp z, .skipRemoveCapturedPiece
-
-    ld a, (b_move_f) ;skip if ep capture, since the destination square doesn't have the piece I'm trying to capture.
+    ;update ep file
+    ld a, (_B_Move_Flag)
     cp MOVE_FLAG_EN_PASSANT
-    jp z, .skipRemoveCapturedPiece
+    jr nz, .skipUpdateEpFile
+;( .updateEpFile: )
+    ld a, (_B_Move_Start)   ;get move file
+    and 0111b
+    ld (C_EpFile), a
+    jr .skipRemoveCapturedPiece ;if it's an EP capture, removing the captured
+.skipUpdateEpFile:              ;piece is a special case handled later.
 
-    ld hl, plTable ;get piecelist
-    ld de, $0300
-    ld a, (capturedPiece)
+    ld a, EN_PASSANT_NONE   ;clear ep file by default
+    ld (C_EpFile), a
+
+    ;remove captured piece if it exists
+    ld a, (_B_CapturedPiece)
+    or a
+    jr z, .skipRemoveCapturedPiece
+;( .removeCapturedPiece: )
+    ld d, 3                 ;piecelist LUT is indexed with (piece)*3
     ld e, a
     mlt de
+    ld hl, PL_LUT
     add hl, de
-    ld ix, (hl)
+    ld ix, (hl)             ;piecelist is now in IX
 
-    ld c, iyl
+    ld e, iyh               ;square to remove in DE
+    push iy                 ;preserve IY
+    call PL_Remove
+    pop iy                  ;restore IY
 
-    push iy
-    call PieceListRemove
-    pop iy
-
-    ld a, (capturedType) ;if a rook is captured remove castling rights for that side
+    ;if a rook is captured, those castling rights have to be removed
+    and MASK_PIECE_TYPE     ;note that _B_CapturedPiece is still in A
     cp PIECE_ROOK
-    jp nz, .skipRookCase
-
-    ld a, iyl
-    call board_RemoveRookCastlingRights
-.skipRookCase:
+    jr nz, .skipRemoveCapturedPiece
+;( .capturedRookCase: )
+    ld a, iyh
+    call Board_RemoveRookCastlingRights
 .skipRemoveCapturedPiece:
 
-;update position of moving piece
-    ld hl, pieces ;pieces[end]=pieces[start]
+    ;update moving piece on C_Board
+    ld hl, C_Board
+    ld e, iyl
+    add hl, de
+    ld a, (hl)              ;copy of moving piece in A
+    ld (hl), PIECE_NONE
+
+    ld hl, C_Board          ;copy moving piece to target square
     ld e, iyh
     add hl, de
-    ld a, (hl)
-    ld (hl), PIECE_NONE ;pieces[start]=0
-    ld hl, pieces
-    ld e, iyl
-    add hl, de
     ld (hl), a
-
-    ;now update piecelist
-    ld hl, plTable
-    ld de, $0300
-    ld a, (movingPiece)
+    
+    ;update moving piece on PieceList
+    ld a, (_B_MovingPiece)
     ld e, a
+    ld d, 3
     mlt de
+
+    ld hl, PL_LUT
     add hl, de
     ld ix, (hl)
 
-    ld c, iyh
-    ld e, iyl
+    ld e, iyl               ;current square
+    ld c, iyh               ;destination square
+    push iy                 ;preserve IY
+    call PL_Move
+    pop iy                  ;restore IY
 
-    push iy
-    call PieceListMove
-    pop iy
-
-    ;if a king is moved update castling rights
-    ld a, (movingType)
+    ;if king moves update castle flags
+    ld a, (_B_MovingType)
     cp PIECE_KING
-    jp nz, .notKingMove
-
-    ld b, MASK_REMOVE_WHITE_CASTLE
-    ld a, (whiteToMove)
-    cp 1
-    jp z, .whiteMove
-    ld b, MASK_REMOVE_BLACK_CASTLE
-.whiteMove:
-    ld a, (castleFlags)
-    and b
-    ld (castleFlags), a
+    jr nz, .notKingMove
+;( .kingMove: )
+    ld c, not MASK_CASTLE_BLACK
+    ld a, (C_CurrentColor)
+    or a
+    jr z, .removeBlackCastleFlags
+;( .removeWhiteCastleFlags: )
+    ld c, not MASK_CASTLE_WHITE
+.removeBlackCastleFlags:
+    ld a, (C_CastleFlags)
+    and c
+    ld (C_CastleFlags), a
 .notKingMove:
 
-    ;if a rook is moved update castling rights
-    ld a, (movingType)
+    ;if rook moves update castle flags
+    ld a, (_B_MovingType)
     cp PIECE_ROOK
-    jp nz, .notRookMove
-
-    ld a, iyh
-    call board_RemoveRookCastlingRights
+    jr nz, .notRookMove
+;( .rookMove: )
+    ld a, iyl
+    call Board_RemoveRookCastlingRights
 .notRookMove:
 
-;handle promotions
-    ld a, (b_move_f)
-    cp MOVE_FLAG_PROMOTE_QUEEN
-    jp c, .skipPromotions ; < comparison
-    cp MOVE_FLAG_PROMOTE_KNIGHT+1
-    jp nc, .skipPromotions ; >= comparison
-    
-    ;remove pawn from piecelist
-    ld hl, (b_currentPlPtr)
-    ld de, PIECE_PAWN*3
-    add hl, de
-    ld ix, (hl)
+    ;move flag special cases.
+    ld a, (_B_Move_Flag)
+    or a
+    jp z, .moveFlagBreak
 
-    ld c, iyl
-
-    push iy
-    call PieceListRemove
-    pop iy
-
-    ;add new piece to respective piece list and to board array.
-    ld a, (b_move_f) ;move flag + 1 == piece type of piece the pawn is promoting to.
-    inc a
-    ld de, $0300
-    ld e, a
-    ld hl, currentColor
-    add (hl) ;A now has the complete piece, and E only the type
-
-    mlt de
-    ld hl, (b_currentPlPtr)
-    add hl, de
-    ld ix, (hl)
-
-    ld c, iyl
-    call PieceListAdd
-
-    ld hl, pieces ;add new piece to board array
-    ld e, iyl
-    add hl, de
-    ld (hl), a
-
-    jp .mf_Break
-.skipPromotions:
-
-;handle special moves
-    ld a, (b_move_f) ;check in most common order
+    ;note JP is used instead of JR because the largers jumps are out
+    ;of range, so all were replaced with JP for consistency.
     cp MOVE_FLAG_DOUBLE_PAWN
-    jp z, .mf_DoublePawn
+    jp z, .moveFlagDoublePawn
     cp MOVE_FLAG_EN_PASSANT
-    jp z, .mf_EnPassant
-    cp MOVE_FLAG_KINGSIDE_CASTLE
-    jp z, .mf_KingsideCastle
-    cp MOVE_FLAG_QUEENSIDE_CASTLE
-    jp z, .mf_QueensideCastle
-    jp .mf_Break
-.mf_KingsideCastle:
-    ld a, iyh
-    add 3 ;start+3 = rook
+    jp z, .moveFlagEnPassant
+    cp MOVE_FLAG_CASTLE_KINGSIDE
+    jp z, .moveFlagCastleKingside
+    cp MOVE_FLAG_CASTLE_QUEENSIDE
+    jp z, .moveFlagCastleQueenside
+.moveFlagPromotion:         ;remaining move flags are promotions
+    ;note that move_flag+1 gives the piece type of the promotion.
 
-    ld hl, (b_currentPlPtr)
-    ld de, PIECE_ROOK*3
+    ld a, (_B_MovingPiece)
+    ld e, a
+    ld d, 3
+    mlt de
+
+    ld hl, PL_LUT
     add hl, de
     ld ix, (hl)
 
-    ld bc, 0
-    ld c, a ;rook
-    sub 2
-    ld e, a ;rook-2
+    ld e, iyh               ;remove pawn from destination square since the
+                            ;generalized MakeMove code will move it there.
 
-    push iy
-    call PieceListMove
-    pop iy
+    push iy                 ;preserve IY
+    call PL_Remove
+    pop iy                  ;restore IY
 
-    ld hl, pieces
-    ld c, a ;rook-2
-    add 2
-    ld e, a ;rook
+    ld a, (_B_Move_Flag)    ;get piece type
+    inc a
+    ld e, a
+    ld a, (C_CurrentColor)  ;combine with current color to get piece
+    add e
+
+    ld hl, C_Board          ;update C_Board
+    ld e, iyh
     add hl, de
-    ld a, (hl)
-    ld (hl), PIECE_NONE
-    ld hl, pieces
-    add hl, bc
-    ld (hl), a
-    
-    ;update screen
-    ld hl, RedrawFlags
-    add hl, de
-    ld (hl), 1
-    sbc hl, de
-    add hl, bc
-    ld (hl), 1
-
-    jp .mf_Break
-.mf_QueensideCastle:
-    ld a, iyh
-    sub 4 ;start-4 = rook
-
-    ld hl, (b_currentPlPtr)
-    ld de, PIECE_ROOK*3
-    add hl, de
-    ld ix, (hl)
-
-    ld bc, 0
-    ld c, a ;rook
-    add 3
-    ld e, a ;rook+3
-
-    push iy
-    call PieceListMove
-    pop iy
-
-    ld hl, pieces
-    ld c, a ;rook+3
-    sub 3
-    ld e, a ;rook
-    add hl, de
-    ld a, (hl)
-    ld (hl), PIECE_NONE
-    ld hl, pieces
-    add hl, bc
     ld (hl), a
 
-    ;update screen
-    ld hl, RedrawFlags
-    add hl, de
-    ld (hl), 1
-    sbc hl, de
-    add hl, bc
-    ld (hl), 1
-
-    jp .mf_Break
-.mf_EnPassant:
-    ld a, (currentIndex) ;epCaptureSquare = end + whiteToMove ? -8 : 8
-    cp 1
-    ld a, -8
-    jp z, .mfep_whiteMove
-    neg
-.mfep_whiteMove:
-    add iyl
-
-    ld hl, b_enemyPlPtr
-    ld de, PIECE_PAWN*3
-    add hl, de
-    ld ix, (hl)
-
-    ld hl, pieces
+    ld c, a                 ;get PL_LUT index
+    add a
+    add c
     ld c, a
+
+    ld hl, PL_LUT           ;load piecelist for promoted piece
     add hl, bc
+    ld ix, (hl)
+
+    push iy                 ;preserve IY
+    call PL_Add             ;note that DE is still set from when
+                            ;C_Board was updated
+    pop iy                  ;restore IY
+
+    jp .moveFlagBreak
+.moveFlagDoublePawn:        ;update ep file with moved pawns file
+    ld a, iyl
+    and 0111b
+    ld (C_EpFile), a
+    jp .moveFlagBreak
+.moveFlagEnPassant:         ;removes captured pawn
+    ;enemy pawn is at square index (end + (whiteMoving ? -8 : 8))
+
+    ld a, (C_CurrentColor)  ;current color = 0 (B) | 8 (W)
+    add a                   ;(-2*CurrentColor+8) = 8 (B) | -8 (W)
+    neg
+    add 8
+
+    add iyh                 ;offset move end square copy in E
+    ld e, a
+
+    ld hl, C_Board
+    add hl, de
+    ld c, (hl)              ;load enemy pawn to use as index to piecelist LUT
     ld (hl), PIECE_NONE
 
-    push iy
-    call PieceListRemove
-    pop iy
+    ld b, 3                 ;load enemy pawn piecelist
+    mlt bc
+    ld hl, PL_LUT
+    add hl, bc
+    ld ix, (hl)
 
-    jp .mf_Break
-.mf_DoublePawn:
-    ld a, iyh ;epFile = SQUARE_TO_FILE(index)
-    and 111b
-    ld (epFile), a
-.mf_Break:
-    ;swap side to move
-    ld a, (whiteToMove)
+    push iy                 ;preserve IY
+    call PL_Remove          ;note square index to pawn is still in DE
+    pop iy                  ;restore IY
+
+    jp .moveFlagBreak
+.moveFlagCastleKingside:
+    ld a, (C_CurrentColor)  ;load rook piecelist
+    add PIECE_ROOK
+    ld c, a
+    add a                   ;A = 2A
+    add c                   ;A = 2A + A = 3A
+    ld e, a
+
+    ld hl, PL_LUT
+    add hl, de
+    ld ix, (hl)
+
+    ld a, (_B_Move_Start)   ;load rook position
+    add 3
+    ld e, a                 ;PL_Move source square
+
+    ld hl, C_Board          ;move rook on C_Board (note C has the rook
+                            ;number/color type saved from above)
+    add hl, de
+    ld (hl), 0              ;clear rook's start square
+    dec hl                  ;move 2 square left and add rook
+    dec hl
+    ld (hl), c
+
+    sub 2                   ;destination square (2 squares left)
+    ld c, a                 ;PL_Move destination square parameter
+
+    push iy                 ;preserve IY
+    call PL_Move
+    pop iy                  ;restore IY
+
+    jp .moveFlagBreak
+.moveFlagCastleQueenside:
+    ld a, (C_CurrentColor)  ;load rook piecelist
+    add PIECE_ROOK
+    ld c, a
+    add a                   ;A = 2A
+    add c                   ;A = 2A + A = 3A
+    ld e, a
+
+    ld hl, PL_LUT
+    add hl, de
+    ld ix, (hl)
+
+    ld a, (_B_Move_Start)   ;load rook position
+    sub 4
+    ld e, a                 ;PL_Move source square
+
+    ld hl, C_Board          ;move rook on C_Board (note C has the rook
+                            ;number/color type saved from above)
+    add hl, de
+    ld (hl), 0
+    inc hl
+    inc hl
+    inc hl
+    ld (hl), c
+
+    add 3                   ;destination square (move rook 3 squares right)
+    ld c, a                 ;PL_Move destination square parameter
+
+    push iy                 ;preserve IY
+    call PL_Move
+    pop iy                  ;restore IY
+
+    ;no break needed
+.moveFlagBreak:
+
+    ld a, (C_WhiteToMove)   ;swap side to move
     xor 1
-    ld (whiteToMove), a
-
-    call board_SetIndexVars
+    ld (C_WhiteToMove), a
 
     ret
 
-;expects move in BC
-board_UnmakeMove:
+;****************************************************************
+; Board_UnmakeMove - Undo move on board. Note that this assumes
+;   that the variables set by Engine_SetPieceListVariables 
+;   and Engine_SetIndexVariables are already set.
+;
+; INPUT:
+;   BC - move
+;
+; DESTROYS: All
+;****************************************************************
+Board_UnmakeMove:
+    ld (_B_Move), bc
+    ld de, 0
+    ld bc, 0
+
+    call Board_PopBoardState
+
+    ;swap side to move, unlike Board_MakeMove this is done at the
+    ;beginning so that the index variables aren't backwards.
+    ld a, (C_WhiteToMove)
+    xor 1
+    ld (C_WhiteToMove), a
+
+    call Engine_SetIndexVariables
+
     ;registers:
     ;   BC - temp
     ;   DE - temp
     ;   HL - temp
-    ;   IX - piecelists
-    ;   IYH - move start
-    ;   IYL - move end
+    ;   IX - reserved for storing piecelists
+    ;   IYL - move start
+    ;   IYH - move end
 
-    ld (board_move), bc
-    ld bc, 0
-    ld de, 0
-
-    ld a, (b_move_s)
-    ld iyh, a
-    ld a, (b_move_e)
+    ld a, (_B_Move_Start)
     ld iyl, a
+    ld a, (_B_Move_End)
+    ld iyh, a
 
-    ;pop state
-    ld hl, board_StateStack
-    ld a, (board_StateSp)
-    sub 3
-    ld (board_StateSp), a
-    ld e, a
-    add hl, de
-    ld a, (hl)
-    ld (capturedPiece), a
-    inc hl
-    ld a, (hl)
-    ld (epFile), a
-    inc hl
-    ld a, (hl)
-    ld (castleFlags), a
-
-    ;swap side to move
-    ld a, (whiteToMove)
-    ld b, a
-    ld a, 1
-    sub b
-    ld (whiteToMove), a
-
-    call board_LoadPlPtrs
-
-    ;pieces[start] = pieces[end], also setup some variables
-    ld hl, pieces
-    ld e, iyl
-    add hl, de
-    ld a, (hl)
-    ld c, a
-    and MASK_PIECE_TYPE
-    ld (movingType), a
-    ld hl, pieces
+    ld hl, C_Board          ;get moving piece
     ld e, iyh
     add hl, de
-    ld (hl), c
-
-    ld a, (capturedPiece)
-    and MASK_PIECE_TYPE
-
-    call board_SetIndexVars
-
-    ret
-
-;expects rook position in a.
-;doesn't preserve A, B
-board_RemoveRookCastlingRights:
-    cp 0
-    jp z, .rook0
-    cp 7
-    jp z, .rook7
-    cp 56
-    jp z, .rook56
-    cp 63
-    jp z, .rook63
-    jp .rookBreak
-.rook0:
-    ld b, 1101b
-    jp .rookBreak
-.rook7:
-    ld b, 1110b
-    jp .rookBreak
-.rook56:
-    ld b, 0111b
-    jp .rookBreak
-.rook63:
-    ld b, 1011b
-.rookBreak:
-    ld a, (castleFlags)
-    and b
-    ld (castleFlags), a
-    ret
-
-;note: doesn't preserve AF
-board_SetIndexVars:
-    push ix
-    ld ix, currentIndex
-
-    ld a, (whiteToMove)
-    cp 0
-    jp z, .blackToMove
-
-    ld (ix), 1   ;currentIndex
-    ld (ix+1), 8 ;currentColor
-    ld (ix+2), 0 ;enemyIndex
-    ld (ix+3), 0 ;enemyColor
-
-    pop ix
-    ret
-.blackToMove:
-    ld (ix), 0
-    ld (ix+1), 0
-    ld (ix+2), 1
-    ld (ix+3), 8
-    
-    pop ix
-    ret
-
-fenSections: rb 6
-fenSectionsCount: db 0
-
-;Expects pointer to fen string in HL
-BoardLoad:
-    push hl ;save str pointer
-
-    call PieceListResetAll
-
-    ld hl, pieces
-    ld (hl), 0
-    ld de, pieces+1
-    ld bc, 63
-    ldir
-
-    ld a, EP_NONE
-    ld (epFile), a
-    xor a
-    ld (castleFlags), a
-    ld (capturedPiece), a
-    ld (board_StateSp), a
-
-    pop hl ;load fen string again, but keep it on the stack
-    push hl
-
-    ld iy, fenSections
-    ld ix, fenSectionsCount
-
-    ;find indicies of where each space-seperated section of a fen string ends.
-    ld c, 0     ;index
-    ld (ix), 0
-.loop_0:
-    ld a, (hl)  ;load next character
-
-    ;skip adding section if ascii is greater than space character.
-    ;this way a space and 0 will trigger adding the end of a section.
-    cp ' '+1
-    jp nc, .loop_continue_0
-
-    ld (iy), c
-    inc iy
-    inc (ix)
-
-    cp 0                ;exit if end of string is reached.
-    jp z, .loop_exit_0
-
-    ld a, (ix)          ;exit if already parsed 6 sections.
-    cp 6
-    jp z, .loop_exit_0
-.loop_continue_0:
-    inc hl
-    inc c
-    jp .loop_0
-.loop_exit_0:
-
-;********************************
-;parses piece positions.
-;a = character
-;c = index
-;iy = string pointer
-;ix = address to length
-    ld c, 0
-    pop iy
-    push iy
-    ld ix, fenSections
-
-    xor a, a
-    ld (_file), a
-    ld a, 7
-    ld (_rank), a
-
-.loop_1:
-    ld a, (iy) ;current character
-
-    cp '0'
-    jp c, .parser_skip_number ;jp c -> less than comparison.
-    cp '9'+1
-    jp nc, .parser_skip_number ;jp nc -> greater than or equal comparison.
-.parser_number:
-    sub a, '0'
-    ld hl, _file
-    add a, (hl)
-    ld (_file), a
-    jp .loop_continue_1
-.parser_skip_number:
-    cp '/'
-    jp nz, .parser_skip_slash
-.parser_slash:
-    xor a, a
-    ld (_file), a
-    ld hl, _rank
-    dec (hl)
-    jp .loop_continue_1
-.parser_skip_slash:
-.parser_piece:
-    ;b stores the piece itself as it's parsed
-    ld b, PIECE_WHITE
-
-    cp 'a'
-    jp c, .not_lowercase
-    cp 'z'+1
-    jp nc, .not_lowercase
-.lowercase:
-    ld b, PIECE_BLACK
-    sub a, 32
-.not_lowercase:
-;calculate index (rank * 8 + file)
-    ld d, a ;preserve character being parsed
-
-    ld hl, _rank
     ld a, (hl)
-    sla a
-    sla a
-    sla a
-    ld hl, _file
-    add a, (hl)
-    inc (hl) ;otherwise _file would have to be incremented later
+    ld (_B_MovingPiece), a
+    and MASK_PIECE_TYPE
+    ld (_B_MovingType), a
 
-    ld e, a ;store index in e
-    ld a, d ;restore character being parsed
+    ld a, (_B_CapturedPiece)
+    and MASK_PIECE_TYPE
+    ld (_B_CapturedType), a
 
-    cp 'K'
-    jp nz, .piece_not_king
-    ld d, PIECE_KING
-    jp .piece_exit
-.piece_not_king:
-    cp 'Q'
-    jp nz, .piece_not_queen
-    ld d, PIECE_QUEEN
-    jp .piece_exit
-.piece_not_queen:
-    cp 'R'
-    jp nz, .piece_not_rook
-    ld d, PIECE_ROOK
-    jp .piece_exit
-.piece_not_rook:
-    cp 'B'
-    jp nz, .piece_not_bishop
-    ld d, PIECE_BISHOP
-    jp .piece_exit
-.piece_not_bishop:
-    cp 'N'
-    jp nz, .piece_not_knight
-    ld d, PIECE_KNIGHT
-    jp .piece_exit
-.piece_not_knight:
-    cp 'P'
-    jp nz, .piece_not_pawn
-    ld d, PIECE_PAWN
-.piece_not_pawn:
-.piece_exit:
-    ld a, b ;color
-    add a, d ;type
-    ld b, e
-    ld de, 0
-    ld e, b ;restore index
-;store piece in both board representations
+    ;revert moving piece position on C_Board
+    ld hl, C_Board          ;place moving piece to start square
+    ld e, iyl
+    add hl, de
+    ld a, (_B_MovingPiece)
+    ld (hl), a
 
-    pushall
+    ;restore captured piece on C_Board and PieceList
+    ld hl, C_Board          ;place captured piece (usually PIECE_NONE) on end square
+    ld e, iyh
+    add hl, de
+    ld a, (_B_CapturedPiece)
+    ld (hl), a
 
-    ld bc, 0
-    ld c, e ;index
-    ld hl, plTable
+    or a                    ;_B_CapturedPiece, this skips if it equals PIECE_NONE
+    jr z, .skipAddCapturedPieceToPieceList
+
+    ld a, (_B_Move_Flag)
+    cp MOVE_FLAG_EN_PASSANT
+    jr z, .skipAddCapturedPieceToPieceList
+
+    ld a, (_B_CapturedPiece);get PieceList using PL_LUT[piece * 3]
     ld e, a
-    add a, a
-    add a, e
-    ld de, 0
-    ld e, a
-    add hl, de ;plTable + piece * 3
+    ld d, 3
+    mlt de
 
+    ld hl, PL_LUT
+    add hl, de
     ld ix, (hl)
 
-    call PieceListAdd
+    ld e, iyh               ;PL_Add parameter
+    push iy                 ;preserve IY
+    call PL_Add
+    pop iy                  ;restore IY
+.skipAddCapturedPieceToPieceList:
 
-    popall
+    ;revert moving piece on piecelist
+    ld a, (_B_MovingPiece)
+    ld e, a
+    ld d, 3
+    mlt de
 
-    ld hl, pieces
-    ld d, 0
+    ld hl, PL_LUT
+    add hl, de
+    ld ix, (hl)
+
+    ld e, iyh               ;piece source square
+    ld c, iyl               ;piece destination square
+    push iy                 ;preserve IY
+    call PL_Move
+    pop iy                  ;restore IY
+
+    ;move flag special cases.
+    ld a, (_B_Move_Flag)
+    or a
+    ret z                   ;early return since there's no code after
+                            ;the flag-specific logic.
+
+    ;note JP is used instead of JR because the largers jumps are out
+    ;of range, so all were replaced with JP for consistency.
+    cp MOVE_FLAG_EN_PASSANT
+    jp z, .moveFlagEnPassant
+    cp MOVE_FLAG_CASTLE_KINGSIDE
+    jp z, .moveFlagCastleKingside
+    cp MOVE_FLAG_CASTLE_QUEENSIDE
+    jp z, .moveFlagCastleQueenside
+.moveFlagPromotion:         ;remaining move flags are promotions
+    ;add pawn back to board
+    ld a, (C_CurrentColor)  ;_B_MovingPiece doesn't work here since it would 
+    add PIECE_PAWN          ;store the piece the pawn promoted into.
+    ld e, a
+    ld d, 3
+    mlt de
+
+    ld hl, PL_LUT
+    add hl, de
+    ld ix, (hl)
+
+    ld e, iyl
+
+    ld hl, C_Board          ;add pawn on C_Board. Note that A has the moving piece definition.
     add hl, de
     ld (hl), a
-.loop_continue_1:
-    inc iy
-    inc c
-    ld a, c
-    cp (ix)
-    jp nz, .loop_1
-.loop_exit_1:
 
-;early return in case of incomplete fen string.
-    ld a, (ix)
-    cp 4 ;note: doesn't account for halfmove and fullmove clocks.
-    ret c
+    push iy                 ;preserve IY
+    call PL_Add
+    pop iy                  ;restore IY
 
-;********************************
-    ld iy, fenSections
-
-;parses side to move
-    pop ix
-    push ix
-    inc iy
-    ld bc, 0
-    ld c, (iy)
-    dec c
-    add ix, bc
-
-    ld hl, whiteToMove
-    ld (hl), 1
-
-    ld a, (ix)
-    cp 'w'
-    jp z, .blackToMove
-    ld (hl), 0
-.blackToMove:
-
-;parses castling rights.
-;IX = string ptr
-    pop ix
-    push ix
-    ld bc, 0
-    ld c, (iy)
-    inc c
-    add ix, bc
-    inc iy
-
-    ld hl, castleFlags
-    ld (hl), 0
-    ld bc, 0
-.loop_castle_flags:
-    ld a, (ix)
-    inc ix
-    cp ' '
-    jp z, .loop_castle_flags_exit
-    cp '-'
-    jp z, .loop_castle_flags_exit
-
-    cp 'K'
-    jp nz, .cf_skip_K
-    ld a, (hl)
-    add a, WHITE_KING_CASTLE
-    ld (hl), a
-    jp .loop_castle_flags
-.cf_skip_K:
-    cp 'Q'
-    jp nz, .cf_skip_Q
-    ld a, (hl)
-    add a, WHITE_QUEEN_CASTLE
-    ld (hl), a
-    jp .loop_castle_flags
-.cf_skip_Q:
-    cp 'k'
-    jp nz, .cf_skip_k
-    ld a, (hl)
-    add a, BLACK_KING_CASTLE
-    ld (hl), a
-    jp .loop_castle_flags
-.cf_skip_k:
-    ld a, (hl)
-    add a, BLACK_QUEEN_CASTLE
-    ld (hl), a
-    jp .loop_castle_flags
-.loop_castle_flags_exit:
-
-;parses ep passant target file
-    pop ix
-    ld bc, 0
-    ld c, (iy)
-    add ix, bc
-    inc ix
-
-    ld hl, epFile
-    ld (hl), EP_NONE
-
-    ld a, (ix)
-    cp '-'
-    jp z, .ep_file_parse_skip
-    sub a, 'a'
-    ld (hl), a
-.ep_file_parse_skip:
-;parsing the halfmove and fullmove clocks will happen after, but I don't think I'll need them.
-
-    call board_SetIndexVars
-
-    ret
-
-;uses OS print functions etc, won't work in 8bpp mode and can be removed for release version.
-BoardPrint:
-    ld a, 7
-    ld (_file), a
-    ld (_rank), a
-
-    setCursorPos 2, 0
-    ld hl, BoardPrintBlankLine
-    push hl
-    call ti.os.PutStrFull
-    pop hl
-
-    setCursorPos 2, 9
-    ld hl, BoardPrintBlankLine
-    push hl
-    call ti.os.PutStrFull
-    pop hl
-
-;print side to move
-    setCursorPos 19, 0
-    ld ix, BoardPrintSideToMove
-    ld (ix+6), 'W'
-    ld hl, whiteToMove
-    ld a, (hl)
-    cp 1
-    jp z, .whiteToMove
-    ld (ix+6), 'B'
-.whiteToMove:
-    ld hl, BoardPrintSideToMove
-    push hl
-    call ti.os.PutStrFull
-    pop hl
-
-;print ep file
-    ld hl, epFile
-    ld a, (hl)
-    add a, 'a'
-    cp EP_NONE+'a'
-    jp nz, .hasEpFile
-    ld a, '-'
-.hasEpFile:
-    ld ix, BoardPrintEpFile
-    ld (ix+4), a
-    setCursorPos 21, 1
-    push ix
-    call ti.os.PutStrFull
-    pop hl
-
-    setCursorPos 18, 3
-    ld hl, BoardPrintCastleLabel
-    push hl
-    call ti.os.PutStrFull
-    pop hl
-
-;print castle flags
-    ld ix, BoardPrintCastleFlags
-    ld hl, castleFlags
-    ld b, (hl)
-
-    bit 0, b
-    jp z, .skip_K
-    ld (ix), 'K'
-    inc ix
-.skip_K:
-    bit 1, b
-    jp z, .skip_Q
-    ld (ix), 'Q'
-    inc ix
-.skip_Q:
-    bit 2, b
-    jp z, .skip_k
-    ld (ix), 'k'
-    inc ix
-.skip_k:
-    bit 3, b
-    jp z, .skip_q
-    ld (ix), 'q'
-    inc ix
-.skip_q:
-    ld (ix), 0
-
-    setCursorPos 18, 4
-    ld hl, BoardPrintCastleFlags
-    push hl
-    call ti.os.PutStrFull
-    pop hl
-
-;print board itself
-.loop_rank:
-    ld a, 7
-    ld (_file), a
-
-    ld de, 0
-    push de
-    ld hl, _rank
-    ld a, 8
-    sub a, (hl)
-    ld de, 0
+    ;remove promoted piece from piecelist
+    ld a, (_B_Move_Flag)    ;move_flag + 1 = piece type
+    inc a
     ld e, a
-    push de
-    call ti.os.SetCursorPos
-    pop de
-    pop de
+    ld a, (C_CurrentColor)
+    add e
 
-    ld hl, _rank
-    ld a, (hl)
-    add a, 49
+    ld e, a
+    ld d, 3
+    mlt de
 
-    ld ix, BoardPrintPieceLine
-    ld (ix), a
-    push ix
+    ld hl, PL_LUT
+    add hl, de
+    ld ix, (hl)
 
-    add a, -49
-    sla a
-    sla a
-    sla a
-    add a, 7
-    ld bc, 0
-    ld c, a
+    ld e, iyh
+    push iy                 ;preserve IY
+    call PL_Remove
+    pop iy                  ;restore IY
 
-    ld iy, pieces
-    add iy, bc
+    jp .moveFlagBreak
+.moveFlagEnPassant:
+    ;calculate square of captured pawn. ( MoveEndSquare + (CurrentColorIsWhite ? -8 : 8) )
 
-    ld de, 16
-    add ix, de
-    ld de, -2
-    ld bc, 0
-.loop_file:
-    ld a, (iy)
-    dec iy
-    ld hl, PieceToAscii
-    ld c, a
+    ld a, (C_CurrentColor)  ;results in -8 if C_CurrentColor was 8, 8 if C_CurrentColor was 0
+    add a
+    neg
+    add 8
+
+    add iyh
+    ld e, a                 ;DE = enemy pawn square
+
+    ld a, (C_EnemyColor)    ;load captured pawn type
+    add PIECE_PAWN
+
+    ld hl, C_Board          ;update C_Board
+    add hl, de
+    ld (hl), a
+
+    ld c, a                 ;get piecelist
+    ld b, 3
+    mlt bc
+    ld hl, PL_LUT
     add hl, bc
-    ld a, (hl)
-    ld (ix), a
-    add ix, de
+    ld ix, (hl)
 
-    ld hl, _file
-    ld a, (hl)
-    dec (hl)
-    cp 0
-    jp nz, .loop_file
+    push iy                 ;preserve IY
+    call PL_Add             ;note that the pawn's square index is still in DE
+    pop iy                  ;restore IY
 
-    call ti.os.PutStrLine
-    pop de
+    jp .moveFlagBreak
+.moveFlagCastleKingside:
+    ld a, (C_CurrentColor)  ;load rook piecelist
+    add PIECE_ROOK
+    ld e, a
+    add a                   ;A = 2A
+    add e                   ;A = 2A + A = 3A
+    ld c, a
 
-    ld hl, _rank
-    ld a, (hl)
-    dec (hl)
-    cp 0
-    jp nz, .loop_rank
+    ld hl, PL_LUT
+    add hl, bc
+    ld ix, (hl)
+
+    ld a, (_B_Move_Start)
+    add 3
+    ld c, a                 ;PL_Move destination square
+
+    ld hl, C_Board          ;move rook on C_Board (note E has the rook
+                            ;number/color type saved from above)
+    add hl, bc
+    ld (hl), e
+    dec hl
+    dec hl
+    ld (hl), 0
+
+    sub 2                   ;source square
+    ld e, a                 ;PL_Move source square parameter
+
+    push iy                 ;preserve IY
+    call PL_Move
+    pop iy                  ;restore IY
+
+    jp .moveFlagBreak
+.moveFlagCastleQueenside:
+    ld a, (C_CurrentColor)  ;load rook piecelist
+    add PIECE_ROOK
+    ld e, a
+    add a                   ;A = 2A
+    add e                   ;A = 2A + A = 3A
+    ld c, a
+
+    ld hl, PL_LUT
+    add hl, bc
+    ld ix, (hl)
+
+    ld a, (_B_Move_Start)
+    sub 4
+    ld c, a                 ;PL_Move destination square
+
+    ld hl, C_Board          ;move rook on C_Board (note E has the rook
+                            ;number/color type saved from above)
+    add hl, bc
+    ld (hl), e
+    inc hl
+    inc hl
+    inc hl
+    ld (hl), 0
+
+    add 3                   ;source square
+    ld e, a                 ;PL_Move source square parameter
+
+    push iy                 ;preserve IY
+    call PL_Move
+    pop iy                  ;restore IY
+.moveFlagBreak:
 
     ret
-
-;********************************************************************************
-BoardPrintBlankLine: db "a b c d e f g h", 0
-BoardPrintPieceLine: db "8 . . . . . . . .", 0
-BoardPrintSideToMove: db "Move: x", 0
-BoardPrintEpFile: db "EP: x", 0
-BoardPrintCastleLabel: db "Castle:", 0
-BoardPrintCastleFlags: db "xxxx", 0

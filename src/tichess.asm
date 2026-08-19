@@ -34,14 +34,19 @@
     include "chess/variables.asm"
     include "chess/definitions.asm"
 
-    include "chess/engine.asm"
     include "chess/piecelist.asm"
     include "chess/fen.asm"
+    include "chess/moves.asm"
 
+    include "chess/engine.asm"
+    include "chess/board.asm"
     include "chess/movegen.asm"
 
-    ;debug
+    ;debug and testing
     include "chess/test/dbg_move_generator.asm"
+    include "chess/test/perft.asm"
+    include "chess/test/perft_data.asm"
+
     include "debug/dbg_vars.asm"
 
 ;read only data

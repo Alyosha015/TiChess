@@ -2,12 +2,12 @@ Main:
     call ti.RunIndicOff
     di
 
-    pushall
+    pushallexx
 
 ;
     SetBpp ti.lcdBpp8
 
-    call LCD_EnableDoubleBuffering
+    ;call LCD_EnableDoubleBuffering
 
     call LCD_Clear
 
@@ -23,7 +23,7 @@ Main:
     ld ix, 0x0D00000
     set 0, (ix+ti.graphFlags) ;see moves.asm
 
-    popall
+    popallexx
 
     call ti.ClrScrn
     call ti.HomeUp

@@ -1,10 +1,9 @@
 ;****************************************************************
-; GFX_LoadLargeFont -   creates sprite definitions / ascii lookup table
-;                       for font at 2x scale. The sprite definitions are
-;                       stored in the ti.pixelShadow free memory area.
+; GFX_LoadLargeFont - creates sprite definitions / ascii lookup table
+;   for font at 2x scale. The sprite definitions are stored in the
+;   ti.pixelShadow free memory area.
 ;
-; INPUTS / PRESERVES: NONE
-;
+; DESTROYS: All
 ;****************************************************************
 GFX_LoadLargeFont:
     ;registers:
@@ -47,12 +46,10 @@ GFX_LLF_LUT_PIXELS:
 ;****************************************************************
 ; _GFX_LoadLargeFont_Sprite - Used to create 2x scale sprite definition.
 ;
-; INPUTS:
+; INPUT:
 ;   IX - sprite data pointer
 ;
-; PRESERVES:
-;   NONE
-;
+; DESTROYS: All
 ;****************************************************************
 _GFX_LoadLargeFont_Sprite:
     ;registers:
@@ -216,17 +213,15 @@ _GFX_LoadLargeFont_Sprite:
 
 ;****************************************************************
 ; GFX_TextLargeRenderSize - Calculates length of provided text in
-;                           pixels if it was rendered in the 2x font.
+;   pixels if it was rendered in the 2x font.
 ;
-; INPUTS:
+; INPUT:
 ;   IY  = String Pointer (null terminated)
 ;
-; OUTPUTS:
+; OUTPUT:
 ;   BC  = Text size in pixels.
 ;
-; PRESERVES:
-;   All
-;
+; DESTROYS: None
 ;****************************************************************
 GFX_TextLargeRenderSize:
     call GFX_TextRenderSize
@@ -238,17 +233,15 @@ GFX_TextLargeRenderSize:
 
 ;****************************************************************
 ; GFX_TextRenderSize - Calculates length of provided text in
-;                      pixels if it was rendered.
+;   pixels if it was rendered.
 ;
-; INPUTS:
-;   IY  = String Pointer (null terminated)
+; INPUT:
+;   IY - String Pointer (null terminated)
 ;
-; OUTPUTS:
-;   DE  = Text size in pixels.
+; OUTPUT:
+;   DE - Text size in pixels.
 ;
-; PRESERVES:
-;   All
-;
+; DESTROYS: All
 ;****************************************************************
 GFX_TextRenderSize:
     push af
@@ -302,16 +295,14 @@ GFX_DRAW_TEXT_VRAM: rb 3 ;used to store vram location
 ;****************************************************************
 ; GFX_DrawTextLarge - Draws text at XY coordinates at 2x scale.
 ;
-; INPUTS:
+; INPUT:
 ;   IY  = String Pointer (null terminated)
 ;   BC  = X coordinate
 ;   DE  = Y coordinate
 ;   H   = Foreground Color
 ;   L   = Background Color
 ;
-; PRESERVES:
-;   NONE
-;
+; DESTROYS: All
 ;****************************************************************
 GFX_DrawTextLarge:
     push hl ;preserve color
@@ -326,16 +317,14 @@ GFX_DrawTextLarge:
 ;****************************************************************
 ; GFX_DrawText - Draws text at XY coordinates.
 ;
-; INPUTS:
+; INPUT:
 ;   IY  = String Pointer (null terminated)
 ;   BC  = X coordinate
 ;   DE  = Y coordinate
 ;   H   = Foreground Color
 ;   L   = Background Color
 ;
-; PRESERVES:
-;   NONE
-;
+; DESTROYS: All
 ;****************************************************************
 GFX_DrawText:
     push hl ;preserve color

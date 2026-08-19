@@ -5,14 +5,17 @@
 ;****************************************************************
 
 FEN_StartPosition:
-    db "3r1k2/8/71/8/3R4/8/8/3K4 w - - 0 1", 0
+    ; db "8/8/8/qPp4K/8/8/8/8 w - c6 0 1", 0
+    ; db "rrb1kbrr/8/8/8/8/8/8/R3K2R w KQkq - 0 1", 0
+    ; db "3r1k2/8/71/8/3R4/8/8/3KR3 w - - 0 1", 0
+    ; db "3r1k2/8/71/8/3R4/8/8/3K4 w - - 0 1", 0
     ; db "r3k3/1p3p2/p2q2p1/bn3P2/1N2PQP1/PB6/3K1R1r/3R4 w - - 0 1", 0 ; attack / pin / check map test
     db "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0
 
 
 ;if optimizing for size was needed I could fit the "_fen_xxxx" variables in the unused parts
 ;of this lookup table and merge it with FEN_LUT_Ascii_to_castle_flags, but that seems excessive.
-FEN_LUT_Ascii_to_piece_type:    ;inde with ASCII MOD 32
+FEN_LUT_Ascii_to_piece_type:    ;index with ASCII MOD 32
     db 0, 0, PIECE_BISHOP, 0, 0, 0, 0, 0, 0, 0, 0, PIECE_KING, 0, 0, PIECE_KNIGHT, 0, PIECE_PAWN, PIECE_QUEEN, PIECE_ROOK
 
 FEN_LUT_Ascii_to_castle_flags:  ;index with ASCII - 75 ('K')
@@ -26,15 +29,13 @@ _fen_count: db 0
 _fen_board_index: db 0
 
 ;****************************************************************
+; FEN_Load - Load chess engine board with provided FEN position
+;   string.
 ;
-; FEN_Load - Load engine/game chess board with provided FEN position.
-;
-; INPUTS:
+; INPUT:
 ;   IX - FEN string pointer.
 ;
-; DESTROYS:
-;   ALL
-;
+; DESTROYS: All
 ;****************************************************************
 FEN_Load:
     call Engine_Reset

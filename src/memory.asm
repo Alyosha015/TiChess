@@ -1,7 +1,6 @@
 ;****************************************************************
-;
 ; Central place to keep track of free memory areas of the calculator
-; which are being reserved for storing large arrays mostly.
+; which are being reserved mainly for storing large arrays.
 ;
 ; https://wikiti.brandonw.net/index.php?title=Category:84PCE:RAM:By_Address
 ;
@@ -10,6 +9,7 @@
 ; D07396h: cmdPixelShadow   -  8400 bytes
 ; D09466h: plotSScreen      - 21945 bytes
 ; D0EA1Fh: saveSScreen      - 21945 bytes
+;****************************************************************
 
 MEM_PS := ti.pixelShadow
 MEM_PS2 := ti.pixelShadow2
@@ -35,6 +35,8 @@ MEM_ENGINE_ATTACK_MAP := MEM_ENGINE_BOARD + 64      ;note that the engine expect
 MEM_ENGINE_CHECK_MAP := MEM_ENGINE_ATTACK_MAP + 64
 MEM_ENGINE_PIN_MAP := MEM_ENGINE_CHECK_MAP + 64
 
+MEM_ENGINE_BOARD_STATE_STACK := MEM_ENGINE_PIN_MAP + 64
+    ;:= MEM_ENGINE_BOARD_STATE_STACK + BOARD_STATE_STACK_SIZE
 
 ;plotSScreen - used for moves heap
 MEM_MOVES_HEAP := ti.plotSScreen

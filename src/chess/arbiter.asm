@@ -1,15 +1,17 @@
-    ARBITER_IN_PROGRESS := 0
-    ARBITER_WHITE_NO_TIME := 1
-    ARBITER_WHITE_MATED := 2
-    ARBITER_BLACK_NO_TIME := 3
-    ARBITER_BLACK_MATED := 4
-    ARBITER_STALEMATE := 5
-    ARBITER_DRAW_NO_MATERIAL := 6
-    ARBITER_DRAW_BY_ARBITER := 7
+;****************************************************************
+;
+; Determines when and why a match ended. See chess/definitions.asm
+; for possible result conditions.
+;
+; In implementation this is called after every move to determine
+; if anyone has won. Results include losing on time, the timer
+; is checked independently and will call this function when a
+; timer hits zero.
+;
+;****************************************************************
 
-;stores result of arbiter_JudgeMatch
-arbiter_Result: db 0
+Arbiter_Result: db 0
 
-arbiter_JudgeMatch:
+Arbiter_JudgeMatch:
 
     ret
