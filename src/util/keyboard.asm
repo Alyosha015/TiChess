@@ -12,8 +12,12 @@
 ; 7	(7F)				DEL	x-VAR	ALPHA	MORE	
 
 
-;waits until keypress is detected.
-WaitForKey:
+;****************************************************************
+; Keyboard_Poll - Updates currently pressed keys.
+;
+; DESTROYS: HL, A
+;****************************************************************
+Keyboard_Poll:
     ld hl, ti.DI_Mode
     ld (hl), 2
 

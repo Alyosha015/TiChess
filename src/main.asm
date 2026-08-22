@@ -38,16 +38,16 @@ Program:
 .mainLoop:
     call GameTick
 
-    ld a, (RunGame)
+    ld a, (Main_RunGame)
     cp 1
     jp z, .mainLoop
 
     ret
 
-RunGame: db 1
+Main_RunGame: db 1
 ;call to stop gameloop
 Exit:
     xor a
-    ld (RunGame), a
+    ld (Main_RunGame), a
     ret
 

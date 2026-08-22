@@ -1,5 +1,5 @@
 SPRITE_PIECE_TABLE = $ - 3
-    ;dl 0 ;NOTE: 3 extra bytes needed here
+    ;dl 0 ;Note: 3 extra bytes needed here
     dl SPRITE_KING
     dl SPRITE_QUEEN
     dl SPRITE_ROOK

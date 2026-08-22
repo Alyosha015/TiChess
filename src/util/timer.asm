@@ -1,11 +1,16 @@
-;note: uses the second hardware timer only.
+;****************************************************************
+; Utility functions for hardware timer. All use the 2nd one only.
+;****************************************************************
 
     TIMER_COUNTER := $F20010
     TIMER_CONTROL := $F20030
 
-;starts timer.
-;doesn't preserve HL
-TimerEnable:
+;****************************************************************
+; Timer_Enable - Starts timer. Doesn't reset to 0.
+;
+; DESTROYS: HL
+;****************************************************************
+Timer_Enable:
     ld hl, TIMER_CONTROL
     res 5, (hl) ;disable generating interrupts
     set 4, (hl) ;use 32k clock
@@ -14,24 +19,32 @@ TimerEnable:
     set 2, (hl) ;count up
     ret
 
-;stops timer.
-;doesn't preserve HL
-TimerDisable:
+;****************************************************************
+; Timer_Disable - Stops timer.
+;
+; DESTROYS: HL
+;****************************************************************
+Timer_Disable:
     ld hl, TIMER_CONTROL
     res 3, (hl)
     ret
 
-;sets time to 0. Make sure timer is disabled beforehand.
-;doesn't preserve HL
-TimerReset:
+;****************************************************************
+; Timer_Reset - Reset timer to 0.
+;
+; DESTROYS: HL
+;****************************************************************
+Timer_Reset:
     ld hl, 0
     ld (TIMER_COUNTER), hl
     ld (TIMER_COUNTER+1), hl
     ret
 
-;gets upper 3 bytes of timer and loads into 24 bit register.
-;note that this means its counting at 128 hz instead of 32768 hz.
-    macro GetTime rr_
-        ld rr_, (TIMER_COUNTER+1)
-    end macro
-
+;****************************************************************
+; Timer_Read rr - Loads the upper 3 bytes of the timer's count
+;   into provided register. Note that this value will increment
+;   at 128 Hz Instead of 32768 Hz.
+;****************************************************************
+macro Timer_Read rr_
+    ld rr_, (TIMER_COUNTER+1)
+end macro

@@ -39,7 +39,12 @@ Engine_Reset:
 ;
 ; DESTROYS: All
 ;****************************************************************
-Engine_Load := FEN_Load
+Engine_Load:
+    call FEN_Load
+    call Engine_SetIndexVariables
+    call Engine_SetPieceListVariables
+
+    ret
 
 ;****************************************************************
 ; Engine_SetIndexVariables - Sets current/enemy index and color

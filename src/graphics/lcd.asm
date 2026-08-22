@@ -57,7 +57,7 @@ LCD_DrawBuffer: dl LCD_BUFFER_0
 ;in the case of double buffering, or start of vram if double
 ;buffering is disabled.
 ;
-;NOTE: just a mapping to the LCD_DMA control register.
+;Note: just a mapping to the LCD_DMA control register.
 LCD_DisplayBuffer := LCD_DMA
 
 ;****************************************************************

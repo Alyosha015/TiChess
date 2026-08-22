@@ -28,6 +28,7 @@
     ;game logic and graphics
     include "game/variables.asm"
     include "game/game.asm"
+    include "game/cursor.asm"
     include "game/boardui.asm"
 
     ;chess engine
