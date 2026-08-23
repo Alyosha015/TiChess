@@ -43,11 +43,9 @@ _Cur_DownPressed: db 0
 _Cur_DownDelayTimer: dl 0
 _Cur_DownRepeatTimer: dl 0
 
-
-
 ;****************************************************************
-; Cursor_ProcessInput - (internal) Handles logic for keypress
-;   states.
+; Cursor_ProcessInputRepeating - (internal) Handles logic for keys
+;   when repeat when held down (such as arrow keys).
 ;
 ; INPUT:
 ;   IX - Cursor_XXXXPresses address
@@ -55,7 +53,7 @@ _Cur_DownRepeatTimer: dl 0
 ;
 ; DESTROYS: A, HL, DE, BC
 ;****************************************************************
-Cursor_ProcessInput:
+Cursor_ProcessInputRepeating:
     jr nz, .keyPressed
 .keyReleased:
 
@@ -113,27 +111,73 @@ Cursor_ProcessInput:
 
     ret
 
+Cursor_EnterPressed: db 0   ;similar idea to above where code needs to
+                            ;decrement the variables to clear the keypress,
+                            ;except here it doesn't increment past 1.
+_Cur_EnterPressed: db 0
+
+
+
+;****************************************************************
+; Cursor_ProcessInputRepeating - (internal) Handles logic for keys
+;   which don't repeat when pressed.
+;
+; INPUT:
+;   IX - Cursor_XXXXPressed address
+;   Z Flag - Bit test for keyboard result.
+;
+; DESTROYS: A, HL, DE, BC
+;****************************************************************
+Cursor_ProcessInputSingle:
+    jr nz, .keyPressed
+.keyReleased:
+    xor a
+    ld (ix+1), a            ;_Cur_XXXXPressed
+
+    ret                     ;return after running .keyReleased logic
+.keyPressed:
+    ld a, (ix+1)            ;_Cur_XXXXPressed
+    or a
+    ret nz                  ;early return if key is already pressed
+.onPress:
+    inc (ix+1)              ;_Cur_XXXXPressed update to true
+
+    ld a, (ix)              ;don't increment more than once incase
+    or a                    ;game logic hasn't managed last input
+    ret nz
+
+    inc (ix)                ;Cursor_XXXXPressed = 1
+
+    ret
+
 Cursor_GameTick:
     call Keyboard_Poll
 
+    ;arrow buttons
     ld a, (ti.kbdG7)
     bit ti.kbitLeft, a
     ld ix, Cursor_LeftPresses
-    call Cursor_ProcessInput
+    call Cursor_ProcessInputRepeating
 
     ld a, (ti.kbdG7)
     bit ti.kbitRight, a
     ld ix, Cursor_RightPresses
-    call Cursor_ProcessInput
+    call Cursor_ProcessInputRepeating
 
     ld a, (ti.kbdG7)
     bit ti.kbitUp, a
     ld ix, Cursor_UpPresses
-    call Cursor_ProcessInput
+    call Cursor_ProcessInputRepeating
 
     ld a, (ti.kbdG7)
     bit ti.kbitDown, a
     ld ix, Cursor_DownPresses
-    call Cursor_ProcessInput
+    call Cursor_ProcessInputRepeating
+
+    ;other keys
+    ld a, (ti.kbdG6)
+    bit ti.kbitEnter, a
+    ld ix, Cursor_EnterPressed
+    call Cursor_ProcessInputSingle
 
     ret

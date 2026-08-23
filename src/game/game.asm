@@ -12,10 +12,11 @@ GameInit:
 
 ;Chess Engine
     call Engine_Init
-    ld ix, FEN_StartPosition
+    ld ix, TEST_FEN
     call Engine_Load
 
 ;Game Logic
+    call BUI_Init
     call BUI_Reset
 
     ret
@@ -24,6 +25,7 @@ GameInit:
 ; GameExit - Call to properly exit program.
 ;****************************************************************
 GameExit:
+    call BUI_Free
 
     call Exit
 
@@ -42,3 +44,4 @@ GameTick:
     call BUI_GameTick
 
     ret
+TEST_FEN: db "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ", 0

@@ -12,7 +12,38 @@ BUI_STATE_SELECT_PROMOTION := 3
 
 _BUI_State: db BUI_STATE_LOAD_LEGAL_MOVES
 _BUI_CursorPosition: db 0
-_BUI_StartSquare: db 0
+_BUI_SelectedSquare: db -1
+_BUI_SelectedSquareMoveCount: db 0
+
+_BUI_LegalMoves: dl 0       ;stores pointer to allocated move list
+_BUI_LegalMovesCount: db 0  ;number of legal moves
+_BUI_HasPromotionMove: db 0 ;true when selected piece can promote on it's move
+
+
+;used as temporary storage to access individual bytes of a move instruction
+_BUI_Move:                  ;this label is used to set the 3 bytes below
+    _BUI_Move_Start: db 0   ;from a single register storing a move.
+    _BUI_Move_End: db 0
+    _BUI_Move_Flag: db 0
+
+
+;****************************************************************
+; BUI_Init - Call once on program start.
+;****************************************************************
+BUI_Init:
+    call AllocMoves
+    ld (_BUI_LegalMoves), ix
+
+    ret
+
+;****************************************************************
+; BUI_Free - Call once on program exit.
+;****************************************************************
+BUI_Free:
+    ld ix, (_BUI_LegalMoves)
+    call FreeMoves
+
+    ret
 
 ;****************************************************************
 ; BUI_Reset - Reset ui state, call after loading new position.
@@ -35,6 +66,8 @@ BUI_Reset:
     ld a, (hl)              ;load first position from king piecelist
     ld (_BUI_CursorPosition), a
 
+    call BUI_ClearSelectedSquare
+
     call BUI_DrawBoardForce
 
     ret
@@ -47,7 +80,7 @@ BUI_GameTick:
     call BUI_UpdateCursor
 
     ld a, (_BUI_State)
-    cp BUI_STATE_LOAD_LEGAL_MOVES
+    or a                    ;cp BUI_STATE_LOAD_LEGAL_MOVES (optimization)
     call z, BUI_StateLoadLegalMoves
 
     ld a, (_BUI_State)
@@ -77,198 +110,58 @@ BUI_DrawTick:
 
     ret
 
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+; SECTION: Game logic for human player making moves.
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
 ;****************************************************************
-; BUI_DrawBoardForce - Redraw all 64 squares, clear dirty squares
-;   markers.
+; BUI_ClearSelectedSquare - (internal) Clear all data about
+;   currently selected square and it's legal moves.
 ;
-; Destroys: All
+; DESTROYS: All
 ;****************************************************************
-BUI_DrawBoardForce:
-    ;clear dirty squares data
+BUI_ClearSelectedSquare:
+    ;before clearing arrays, mark square with move
+    ;destination markers for redraw.
     ld hl, BUI_DirtySquares
+    ld de, 0
+    ld e, a                 ;note that A = selected square from above
+    add hl, de
+    ld (hl), 1
+
+    ld a, (_BUI_SelectedSquareMoveCount)
+    or a
+    jr z, .loopBreak        ;will happen when called on initilization
+    ld ix, BUI_MovesForSelectedPiece
+    ld b, a
+.loop:
+    push bc                 ;preserve loop counter
+    ld bc, (ix)
+    lea ix, ix+3
+    
+    ld hl, BUI_DirtySquares
+    ld e, b                 ;move end square
+    add hl, de
+    ld (hl), 1
+
+    pop bc                  ;restore loop counter
+    djnz .loop
+.loopBreak:
+    ;clear legal moves lookup data (192*2 B)
+    ld hl, BUI_SquareToMove
     ld (hl), 0
-    inc hl
-    ld de, BUI_DirtySquares
-    ld bc, 63
+    ld de, BUI_SquareToMove+1
+    ld bc, 383              ;64 * 6 - 1
     ldir
 
+    ld a, -1
+    ld (_BUI_SelectedSquare), a
+
     xor a
-.loop:
-    push af
-
-    call BUI_DrawSquare
-
-    pop af
-    inc a
-    cp 64
-    jr nz, .loop
+    ld (_BUI_HasPromotionMove), a
+    ld (_BUI_SelectedSquareMoveCount), a
 
     ret
-
-;****************************************************************
-; BUI_DrawBoard - Redraws only squares marked for redraw.
-;
-; DESTROYS: All
-;****************************************************************
-BUI_DrawBoard:
-    ld hl, BUI_DirtySquares
-
-    ld c, 0                 ;loop counter
-.loop:
-    ld a, (hl)
-    or a
-    jr z, .loopContinue
-
-    ld (hl), 0
-    push hl
-    push bc
-    ld a, c
-    call BUI_DrawSquare
-    pop bc
-    pop hl
-.loopContinue:
-    inc hl
-    inc c
-    ld a, c
-    cp 64
-    jr nz, .loop
-
-    ret
-
-;temporary variables for BUI_DrawSquare
-;note that _bui_index and _bui_square_x/y are stored as 3 bytes so they can be accessed
-;as LD BC, (_bui_square_x), so BC doesn't need to be cleared in a seperate step.
-_bui_index: dl 0    ;0-63 (file = index & 111b, rank = index >> 3)
-_bui_rank: db 0     ;0-7 rows    (1-8)
-_bui_file: db 0     ;0-7 columns (a-h)
-_bui_square_x: dl 0 ;top left corner coordinates for square currently being drawn.
-_bui_square_y: dl 0
-_bui_square_piece: db 0
-
-;****************************************************************
-; BUI_DrawSquare - Redraws provided square.
-;
-; INPUT:
-;   A - board position (0-63)
-;
-; DESTROYS: All
-;****************************************************************
-BUI_DrawSquare:
-    ;B - file (x)
-    ;C - rank (y)
-    ld c, a
-
-    ld (_bui_index), a
-    and 111b                ;calculate file (index & 0000_0111b)
-    ld (_bui_file), a
-    ld b, a
-    
-    srl c                   ;calculate rank (index >> 3)
-    srl c
-    srl c
-
-    ex af, af'              ;preserve A
-    ld a, c
-    ld (_bui_rank), a
-    ex af, af'              ;restore A
-
-    add c                   ;A = file + C (rank)
-
-    srl a                   ;move lowest bit to carry flag
-    ld a, COLOR_BOARD_WHITE
-    jr c, .isOdd
-.isEven:
-    inc a                   ;COLOR_BOARD_BLACK is (COLOR_BOARD_WHITE + 1)
-.isOdd:
-    ex af, af'              ;preserve color
-
-    ld a, 7
-    sub c
-
-    ld e, 30                ;calculate y
-    ld d, a
-    mlt de
-
-    ld c, 30                ;calculate x
-    mlt bc
-
-    ;adjust coordinates if view is flipped. Both are recalculated as x = 240 - x.
-    ld a, (BUI_Perspective)
-    or a
-    jr nz, .boardPerspectiveWhite
-
-    ld a, 210
-    sub c
-    ld c, a
-
-    ld a, 210
-    sub e
-    ld e, a
-.boardPerspectiveWhite:
-
-    ld a, c
-    ld (_bui_square_x), a
-    ld a, e
-    ld (_bui_square_y), a
-
-    ;draw board square, note that DE/BC/A have the proper x/y/color arguments already
-    ex af, af'              ;restore color
-    ld hl, 30 * 256 + 30
-    call GFX_FillRectangle
-
-    ;draw chess piece
-    ld hl, C_Board          ;load chess piece at square
-    ld de, (_bui_index)
-    add hl, de
-    ld a, (hl)
-
-    or a
-    jr z, .skipDrawChessPiece
-
-    ld (_bui_square_piece), a
-
-    and MASK_PIECE_TYPE
-    ld e, a                 ;get sprite pointer
-    ld d, 3
-    mlt de
-    ld hl, SPRITE_PIECE_TABLE
-    add hl, de
-    ld ix, (hl)
-
-    ld bc, (_bui_square_x)
-    ld de, (_bui_square_y)
-
-    ld hl, COLOR_BOARD_PIECE_WHITE * 256 + COLOR_TRANSPARENT
-
-    ld a, (_bui_square_piece)
-    and MASK_PIECE_COLOR
-    or a
-    jr nz, .pieceIsWhite
-    inc h                   ;COLOR_BOARD_PIECE_BLACK is (COLOR_BOARD_PIECE_WHITE + 1)
-.pieceIsWhite:
-
-    call GFX_Sprite1Bpp
-
-.skipDrawChessPiece:
-
-    ;draw cursor
-    ld a, (_bui_index)
-    ld hl, _BUI_CursorPosition
-    cp (hl)
-    jr nz, .skipDrawCursor
-
-    ld ix, SPRITE_CURSOR
-    ld bc, (_bui_square_x)
-    ld de, (_bui_square_y)
-    ld hl, COLOR_BOARD_CURSOR * 256 + COLOR_TRANSPARENT
-    call GFX_Sprite1Bpp
-.skipDrawCursor:
-
-    ret
-
-;* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-; Internal subroutines of boardui.asm
-;* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 ;****************************************************************
 ; BUI_UpdateCursor - (internal) Use keyboard input to move
@@ -355,18 +248,402 @@ BUI_UpdateCursor:
 
     ret
 
+;****************************************************************
+; BUI_LoadPieceMoves - (internal) Used to check if current cursor
+;   square has moves, and to store them for quick access if so in
+;   BUI_MOvesForSelectedPiece and BUI_SquareToMove.
+;
+; OUTPUT:
+;   Z - RESET if square has piece with moves, SET if no moves
+;
+; DESTROYS: All
+;****************************************************************
+BUI_LoadPieceMoves:
+    ld a, (_BUI_LegalMovesCount)
+    or a
+    ret z                   ;return if there are no legal moves,
+                            ;although this shouldn't happen
+    ld ix, (_BUI_LegalMoves)
+    ld iy, BUI_MovesForSelectedPiece
+
+    ex af, af'              ;zero A', which stores if a legal move for the square was found.
+    xor a
+    ex af, af'
+
+    ld b, a                 ;init loop counter with legal move count
+.loop:
+    push bc                 ;preserve loop counter
+    ld de, (ix)
+    lea ix, ix+3
+    ld (_BUI_Move), de
+
+    ld a, (_BUI_Move_Start)
+    ld hl, _BUI_CursorPosition
+    cp (hl)
+    jr nz, .loopContinue
+
+    ex af, af'              ;legal move was found!
+    inc a
+    ex af, af'
+
+    ld (iy), de             ;store move in BUI_MovesForSelectedPiece
+                            ;note DE still stores the move from above
+    lea iy, iy+3
+
+    ld hl, BUI_SquareToMove ;store move in BUI_SquareToMove
+                            ;where BUI_SquareToMove[endSquareIndex * 3] = move
+    ld b, 3
+    ld a, (_BUI_Move_End)
+    ld c, a
+    mlt bc
+    add hl, bc
+    ld (hl), de             ;note DE still stores the move from above
+    ;B doesn't need to be zeroed since the max value is 63*3 < 256
+
+    ;mark destination square for redraw
+    ld hl, BUI_DirtySquares
+    ld de, 0
+    ld e, a
+    add hl, de
+    ld (hl), 1
+
+    ;note if move is a promotion
+    ld a, (_BUI_Move_Flag)
+    cp MOVE_FLAG_PROMOTE_QUEEN
+    jr c, .notPromotionMove ;jump on less than
+    cp MOVE_FLAG_PROMOTE_KNIGHT+1
+    jr nc, .notPromotionMove;jump on greater than or equal to
+    
+.isPromotionMove:
+    ld a, 1
+    ld (_BUI_HasPromotionMove), a
+.notPromotionMove:
+
+.loopContinue:
+    pop bc                  ;restore loop counter
+    djnz .loop
+
+    ex af, af'              ;reset Z-flag if moves for square were found 
+    ld (_BUI_SelectedSquareMoveCount), a
+    or a
+
+    ret
+
 BUI_StateLoadLegalMoves:
+    ld ix, (_BUI_LegalMoves)
+    call MoveGen_Generate
+
+    ld a, (MG_MoveCount)
+    ld (_BUI_LegalMovesCount), a
+
+    ld a, BUI_STATE_SELECT_PIECE
+    ld (_BUI_State), a
 
     ret
 
 BUI_StateSelectPiece:
+    ;don't do anything until square selection is attempted
+    ld hl, Cursor_EnterPressed
+    ld a, (hl)
+    or a
+    ret z
+
+    dec (hl)
+
+    call BUI_LoadPieceMoves
+    ret z                   ;early return if no moves are found
+                            ;for selected square
+
+    ;mark move start square for redraw
+    ld hl, BUI_DirtySquares
+    ld de, 0
+    ld a, (_BUI_CursorPosition)
+    ld e, a
+    add hl, de
+    ld (hl), 1
+
+    ld (_BUI_SelectedSquare), a
+
+    ld a, BUI_STATE_SELECT_DESTINATION
+    ld (_BUI_State), a
 
     ret
 
 BUI_StateSelectDestination:
+    ;don't do anything until square selection is attempted
+    ld hl, Cursor_EnterPressed
+    ld a, (hl)
+    or a
+    ret z
+
+    dec (hl)
+
+    ld a, (_BUI_CursorPosition)
+    ld d, 3
+    ld e, a
+    mlt de
+    ld hl, BUI_SquareToMove
+    add hl, de
+    ld bc, (hl)
+    ld (_BUI_Move), bc
+    or a                    ;clear carry flag
+    sbc hl, hl              ;clear hl
+    sbc hl, bc              ;zero flag will be set if BC=0
+    jr z, .noMoveAtSquare
+
+    ret
+.noMoveAtSquare:
+
+    ;add enter keypress into queue so that Select Piece state tries to
+    ;select the current square without pressing twice. However, if the
+    ;cursor is on the selected square don't incremented so that the
+    ;piece doesn't get re-selected again.
+
+    ld a, (_BUI_SelectedSquare)
+    ld hl, _BUI_CursorPosition
+    cp (hl)
+    jr z, .pieceStartSquareClicked
+    ld hl, Cursor_EnterPressed
+    inc (hl)
+.pieceStartSquareClicked:
+
+    call BUI_ClearSelectedSquare
+
+    ld a, BUI_STATE_SELECT_PIECE
+    ld (_BUI_State), a
 
     ret
 
 BUI_StateSelectPromotion:
+
+    ret
+
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+; SECTION: Graphics drawing subroutines for board.
+; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+;****************************************************************
+; BUI_DrawBoardForce - Redraw all 64 squares, clear dirty squares
+;   markers.
+;
+; Destroys: All
+;****************************************************************
+BUI_DrawBoardForce:
+    ;clear dirty squares data
+    ld hl, BUI_DirtySquares
+    ld (hl), 0
+    ld de, BUI_DirtySquares+1
+    ld bc, 63
+    ldir
+
+    xor a
+.loop:
+    push af
+
+    call BUI_DrawSquare
+
+    pop af
+    inc a
+    cp 64
+    jr nz, .loop
+
+    ret
+
+;****************************************************************
+; BUI_DrawBoard - Redraws only squares marked for redraw.
+;
+; DESTROYS: All
+;****************************************************************
+BUI_DrawBoard:
+    ld hl, BUI_DirtySquares
+
+    ld c, 0                 ;loop counter
+.loop:
+    ld a, (hl)
+    or a
+    jr z, .loopContinue
+
+    ld (hl), 0
+    push hl
+    push bc
+    ld a, c
+    call BUI_DrawSquare
+    pop bc
+    pop hl
+.loopContinue:
+    inc hl
+    inc c
+    ld a, c
+    cp 64
+    jr nz, .loop
+
+    ret
+
+;temporary variables for BUI_DrawSquare
+;note that _bui_index and _bui_square_x/y are stored as 3 bytes so they can be accessed
+;as LD BC, (_bui_square_x), so BC doesn't need to be cleared in a seperate step.
+_bui_index: dl 0    ;0-63 (file = index & 111b, rank = index >> 3)
+_bui_rank: db 0     ;0-7 rows    (1-8)
+_bui_file: db 0     ;0-7 columns (a-h)
+_bui_square_x: dl 0 ;top left corner coordinates for square currently being drawn.
+_bui_square_y: dl 0
+_bui_square_piece: db 0
+_bui_square_color: db 0 ;WHITE=1 BLACK=0
+
+;****************************************************************
+; BUI_DrawSquare - Redraws provided square.
+;
+; INPUT:
+;   A - board position (0-63)
+;
+; DESTROYS: All
+;****************************************************************
+BUI_DrawSquare:
+    ;B - file (x)
+    ;C - rank (y)
+    ld c, a
+
+    ld (_bui_index), a
+    and 111b                ;calculate file (index & 0000_0111b)
+    ld (_bui_file), a
+    ld b, a
+    
+    srl c                   ;calculate rank (index >> 3)
+    srl c
+    srl c
+
+    ex af, af'              ;preserve A
+    ld a, c
+    ld (_bui_rank), a
+    ex af, af'              ;restore A
+
+    add c                   ;A = file + C (rank)
+
+    ld e, 1                 ;_bui_square_color
+    srl a                   ;move lowest bit to carry flag
+    ld a, COLOR_BOARD_WHITE
+    jr c, .isOdd
+.isEven:
+    inc a                   ;COLOR_BOARD_BLACK is (COLOR_BOARD_WHITE + 1)
+    dec e                   ;if black decrement to make E=0
+.isOdd:
+    ex af, af'              ;preserve color
+
+    ld a, e
+    ld (_bui_square_color), a
+
+    ld a, 7
+    sub c
+
+    ld e, 30                ;calculate y
+    ld d, a
+    mlt de
+
+    ld c, 30                ;calculate x
+    mlt bc
+
+    ;adjust coordinates if view is flipped. Both are recalculated as x = 240 - x.
+    ld a, (BUI_Perspective)
+    or a
+    jr nz, .boardPerspectiveWhite
+
+    ld a, 210
+    sub c
+    ld c, a
+
+    ld a, 210
+    sub e
+    ld e, a
+.boardPerspectiveWhite:
+
+    ld a, c
+    ld (_bui_square_x), a
+    ld a, e
+    ld (_bui_square_y), a
+
+    ;draw board square, note that DE/BC/A have the proper x/y/color arguments already
+    ex af, af'              ;restore color
+    ld hl, 30 * 256 + 30
+    call GFX_FillRectangle
+
+    ld hl, C_Board          ;load chess piece at square for later
+    ld de, (_bui_index)
+    add hl, de
+    ld a, (hl)
+    ld (_bui_square_piece), a
+
+    ;draw move destination markers
+    ;if there is a chess piece on the board draw the large circle marker,
+    ;if the square is empty draw the small marker instead.
+    ld hl, BUI_SquareToMove
+    ld de, (_bui_index)
+    ld d, 3
+    mlt de
+    add hl, de
+    ld bc, (hl)
+    or a                    ;clear carry flag
+    sbc hl, hl              ;clear hl
+    sbc hl, bc              ;zero flag will be set if BC=0
+    jr z, .skipDrawMoveDestinationMarker
+
+    ld ix, SPRITE_MOVE_DESTINATION_MARKER_SMALL
+    or a                    ;note that A has the chess piece in it from _bui_square_piece loading above
+    jr z, .hasNoChessPiece
+    ld ix, SPRITE_MOVE_DESTINATION_MARKER_LARGE
+.hasNoChessPiece:
+    ld bc, (_bui_square_x)
+    ld de, (_bui_square_y)
+    ld hl, COLOR_BOARD_LEGAL_MOVE_WHITE * 256 + COLOR_TRANSPARENT
+    ld a, (_bui_square_color)
+    or a
+    jr nz, .destMarkerSquareWhite
+;( .destMarkerSquareBlack: )
+    inc h
+.destMarkerSquareWhite:
+
+    call GFX_Sprite1Bpp
+.skipDrawMoveDestinationMarker:
+
+    ;draw chess piece
+    ld a, (_bui_square_piece)
+    or a
+    jr z, .skipDrawChessPiece
+
+    and MASK_PIECE_TYPE
+    ld e, a                 ;get sprite pointer
+    ld d, 3
+    mlt de
+    ld hl, SPRITE_PIECE_TABLE
+    add hl, de
+    ld ix, (hl)
+
+    ld bc, (_bui_square_x)
+    ld de, (_bui_square_y)
+
+    ld hl, COLOR_BOARD_PIECE_WHITE * 256 + COLOR_TRANSPARENT
+
+    ld a, (_bui_square_piece)
+    and MASK_PIECE_COLOR
+    or a
+    jr nz, .pieceIsWhite
+    inc h                   ;COLOR_BOARD_PIECE_BLACK is (COLOR_BOARD_PIECE_WHITE + 1)
+.pieceIsWhite:
+
+    call GFX_Sprite1Bpp
+
+.skipDrawChessPiece:
+
+    ;draw cursor
+    ld a, (_bui_index)
+    ld hl, _BUI_CursorPosition
+    cp (hl)
+    jr nz, .skipDrawCursor
+
+    ld ix, SPRITE_CURSOR
+    ld bc, (_bui_square_x)
+    ld de, (_bui_square_y)
+    ld hl, COLOR_BOARD_CURSOR * 256 + COLOR_TRANSPARENT
+    call GFX_Sprite1Bpp
+.skipDrawCursor:
 
     ret

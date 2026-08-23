@@ -21,6 +21,8 @@ MEM_LARGE_FONT := MEM_FONT_TABLE_LARGE + 3 * 95
 
 ;pixelShadow2 - used by game logic
 MEM_BUI_DIRTY_SQUARES := MEM_PS2    ;64 B
+MEM_BUI_SQUARE_TO_MOVE := MEM_BUI_DIRTY_SQUARES + 64    ;192 B
+MEM_BUI_MOVES_FOR_SELECTED_PIECE := MEM_BUI_SQUARE_TO_MOVE + 192    ;192 B
 
 
 ;cmdPixelShadow - used by chess engine

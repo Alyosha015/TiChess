@@ -20,4 +20,8 @@ PERSPECTIVE_BLACK := 0
 
 BUI_Perspective: db PERSPECTIVE_WHITE
 
-BUI_DirtySquares := MEM_BUI_DIRTY_SQUARES ;64 B
+BUI_DirtySquares := MEM_BUI_DIRTY_SQUARES   ;64 B
+;note this and the following must be one after the
+;other for code which zeros them.
+BUI_SquareToMove := MEM_BUI_SQUARE_TO_MOVE  ;192 B
+BUI_MovesForSelectedPiece := MEM_BUI_MOVES_FOR_SELECTED_PIECE   ;192 B
