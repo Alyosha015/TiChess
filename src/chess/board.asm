@@ -98,8 +98,8 @@ Board_RemoveRookCastlingRights:
 
 ;****************************************************************
 ; Board_MakeMove - Make move on board. Note that this assumes
-;   that the variables set by Engine_SetPieceListVariables 
-;   and Engine_SetIndexVariables are already set.
+;   that the variables set by Engine_SetIndexVariables are
+;   already set.
 ;
 ; INPUT:
 ;   BC - move
@@ -403,9 +403,7 @@ Board_MakeMove:
     ret
 
 ;****************************************************************
-; Board_UnmakeMove - Undo move on board. Note that this assumes
-;   that the variables set by Engine_SetPieceListVariables 
-;   and Engine_SetIndexVariables are already set.
+; Board_UnmakeMove - Undo just played move on board.
 ;
 ; INPUT:
 ;   BC - move

@@ -115,6 +115,67 @@ BUI_DrawTick:
 ; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 ;****************************************************************
+; BUI_MakeMoveMarkSquaresForRedraw - (internal) Covers the edge
+;   case square redraw for en passant captures and castling,
+;   where a piece moves or is removed on squares not on the end
+;   square of the move.
+;
+; INPUT: Assume _BUI_Move is loaded with move to be played.
+;
+; DESTROYS: A, HL, DE
+;****************************************************************
+BUI_MakeMoveMarkSquaresForRedraw:
+    ld a, (_BUI_Move_Flag)  ;early return if move flag is 0
+    or a
+    ret z
+
+    ld hl, BUI_DirtySquares
+    ld de, 0
+
+    cp MOVE_FLAG_EN_PASSANT
+    jr nz, .notEnPassant
+;( .enPassant: )
+    ld a, (C_CurrentColor)  ;current color = 0 (B) | 8 (W)
+    add a                   ;(-2*CurrentColor+8) = 8 (B) | -8 (W)
+    neg
+    add 8
+
+    ld e, a
+    ld a, (_BUI_Move_End)
+    add e
+    ld e, a
+
+    add hl, de
+    ld (hl), 1
+
+    ret
+.notEnPassant:
+
+    cp MOVE_FLAG_CASTLE_KINGSIDE
+    jr nz, .notCastleKingside
+;( .castleKingside: )
+    ld a, (_BUI_Move_End)   ;rook is one square to right of move end square
+    inc a
+    ld e, a
+    add hl, de
+    ld (hl), 1
+
+    ret
+.notCastleKingside:
+
+    cp MOVE_FLAG_CASTLE_QUEENSIDE
+    ret nz
+;( .castleQueenside: )
+    ld a, (_BUI_Move_End)   ;rook is two squares left of move end square
+    dec a
+    dec a
+    ld e, a
+    add hl, de
+    ld (hl), 1
+
+    ret
+
+;****************************************************************
 ; BUI_ClearSelectedSquare - (internal) Clear all data about
 ;   currently selected square and it's legal moves.
 ;
@@ -123,9 +184,10 @@ BUI_DrawTick:
 BUI_ClearSelectedSquare:
     ;before clearing arrays, mark square with move
     ;destination markers for redraw.
+    ld a, (_BUI_SelectedSquare)
     ld hl, BUI_DirtySquares
     ld de, 0
-    ld e, a                 ;note that A = selected square from above
+    ld e, a
     add hl, de
     ld (hl), 1
 
@@ -390,6 +452,42 @@ BUI_StateSelectDestination:
     sbc hl, hl              ;clear hl
     sbc hl, bc              ;zero flag will be set if BC=0
     jr z, .noMoveAtSquare
+.moveAtSquare:
+    ld a, (_BUI_HasPromotionMove)
+    or a
+    jr nz, .promotionMove
+.notPromotionMove:
+    ;if it's not a promotion move, the move can simply be played.
+
+    call BUI_MakeMoveMarkSquaresForRedraw
+
+    call Engine_MakeMove    ;BC still has the move stored
+
+    call BUI_ClearSelectedSquare
+
+    ld a, BUI_STATE_LOAD_LEGAL_MOVES
+    ld (_BUI_State), a
+
+    ret
+.promotionMove:
+    ;in the case of a promotion the chessboard draws like this:
+    ;
+    ; . . . Q . . . .
+    ; . . . N . . . .
+    ; . . . B . . . .
+    ; . . . R . . . .
+    ;
+
+    ;promotion square offset
+    ld a, (C_CurrentColor)  ;current color = 0 (B) | 8 (W)
+    add a                   ;(-2*CurrentColor+8) = 8 (B) | -8 (W)
+    neg
+    add 8
+    ld c, a
+
+
+    ld a, BUI_STATE_SELECT_PROMOTION
+    ld (_BUI_State), a
 
     ret
 .noMoveAtSquare:
@@ -455,6 +553,8 @@ BUI_DrawBoardForce:
 ; DESTROYS: All
 ;****************************************************************
 BUI_DrawBoard:
+    call LCD_WaitForRefresh
+
     ld hl, BUI_DirtySquares
 
     ld c, 0                 ;loop counter
@@ -528,6 +628,16 @@ BUI_DrawSquare:
     dec e                   ;if black decrement to make E=0
 .isOdd:
     ex af, af'              ;preserve color
+
+    ;if square is selected use selected square color
+    ld a, (_bui_index)
+    ld hl, _BUI_SelectedSquare
+    cp (hl)
+    jr nz, .notSelectedSquare
+    ex af, af'
+    add COLOR_BOARD_SELECTED_WHITE-COLOR_BOARD_WHITE
+    ex af, af'
+.notSelectedSquare:
 
     ld a, e
     ld (_bui_square_color), a

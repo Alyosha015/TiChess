@@ -47,6 +47,28 @@ Engine_Load:
     ret
 
 ;****************************************************************
+; Engine_MakeMove - Play move on chessboard. Note that this assumes
+;   that the variables set by Engine_SetIndexVariables are
+;   already set.
+;
+; INPUT:
+;   BC - move
+;
+; DESTROYS: All
+;****************************************************************
+Engine_MakeMove := Board_MakeMove
+
+;****************************************************************
+; Engine_UnmakeMove - Undo just played move on chessboard.
+;
+; INPUT:
+;   BC - move
+;
+; DESTROYS: All
+;****************************************************************
+Engine_UnmakeMove := Board_UnmakeMove
+
+;****************************************************************
 ; Engine_SetIndexVariables - Sets current/enemy index and color
 ; variables based on value of C_WhiteToMove.
 ;

@@ -12,6 +12,7 @@ GameInit:
 
 ;Chess Engine
     call Engine_Init
+    ;ld ix, FEN_StartPosition
     ld ix, TEST_FEN
     call Engine_Load
 

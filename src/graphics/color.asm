@@ -66,8 +66,8 @@ PaletteStart:
     COLOR555 24, 24, 24 ;14 - board rank/file label
     COLOR555  8, 31,  8 ;15 - board cursor
 
-    COLOR555 31, 31,  0 ;16 - board selected square white
-    COLOR555 31, 31,  8 ;17 - board selected square black
+    COLOR555 10, 22, 24 ;16 - board selected square white
+    COLOR555  8, 18, 20 ;17 - board selected square black
     COLOR555 12, 12, 24 ;18 - board legal move marked white
     COLOR555  6,  6, 16 ;19 - board legal move marked black
 

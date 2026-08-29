@@ -61,7 +61,24 @@ LCD_DrawBuffer: dl LCD_BUFFER_0
 LCD_DisplayBuffer := LCD_DMA
 
 ;****************************************************************
-; LCD_EnableDoubleBuffering - enables double buffering
+; LCD_WaitForRefresh - Wait until LCD has finished drawing
+;   operation. Generally called before graphics operations
+;   to reduce flicker.
+;
+; DESTROYS: HL
+;****************************************************************
+LCD_WaitForRefresh:
+    ld hl, LCD_ICR
+    set 2, (hl)
+    ld l, LCD_RIS and $FF
+.waitLoop:
+    bit 2, (hl)
+    jr z, .waitLoop
+    
+    ret
+
+;****************************************************************
+; LCD_EnableDoubleBuffering - Enables double buffering
 ;
 ; DESTROYS: A, HL, DE
 ;
@@ -80,7 +97,7 @@ LCD_EnableDoubleBuffering:
     ret
 
 ;****************************************************************
-; LCD_DisableDoubleBuffering - disables double buffering
+; LCD_DisableDoubleBuffering - Disables double buffering
 ;
 ; DESTROYS: A, HL, DE
 ;
@@ -105,19 +122,12 @@ LCD_DisableDoubleBuffering:
 ;
 ;****************************************************************
 LCD_Swap:
-    ;do the swap
+    call LCD_WaitForRefresh
+
     ld hl, (LCD_DrawBuffer)
     ld de, (LCD_DMA)
     ld (LCD_DrawBuffer), de
     ld (LCD_DMA), hl
-
-    ;wait until lcd draw (prevent tearing)
-    ld hl, LCD_ICR
-    set 2, (hl)
-    ld l, LCD_RIS and $FF
-.waitLoop:
-    bit 2, (hl)
-    jr z, .waitLoop
 
     ret
 
