@@ -115,7 +115,7 @@ BUI_DrawTick:
 ; * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 ;****************************************************************
-; BUI_MakeMoveMarkSquaresForRedraw - (internal) Covers the edge
+; BUI_MakeCastleEpSquaresForRedraw - (internal) Covers the edge
 ;   case square redraw for en passant captures and castling,
 ;   where a piece moves or is removed on squares not on the end
 ;   square of the move.
@@ -124,7 +124,7 @@ BUI_DrawTick:
 ;
 ; DESTROYS: A, HL, DE
 ;****************************************************************
-BUI_MakeMoveMarkSquaresForRedraw:
+BUI_MakeCastleEpSquaresForRedraw:
     ld a, (_BUI_Move_Flag)  ;early return if move flag is 0
     or a
     ret z
@@ -177,7 +177,8 @@ BUI_MakeMoveMarkSquaresForRedraw:
 
 ;****************************************************************
 ; BUI_ClearSelectedSquare - (internal) Clear all data about
-;   currently selected square and it's legal moves.
+;   currently selected square and it's legal moves. Also marks
+;   selected/destination squares for redraw.
 ;
 ; DESTROYS: All
 ;****************************************************************
@@ -313,7 +314,7 @@ BUI_UpdateCursor:
 ;****************************************************************
 ; BUI_LoadPieceMoves - (internal) Used to check if current cursor
 ;   square has moves, and to store them for quick access if so in
-;   BUI_MOvesForSelectedPiece and BUI_SquareToMove.
+;   BUI_MovesForSelectedPiece and BUI_SquareToMove.
 ;
 ; OUTPUT:
 ;   Z - RESET if square has piece with moves, SET if no moves
@@ -459,7 +460,7 @@ BUI_StateSelectDestination:
 .notPromotionMove:
     ;if it's not a promotion move, the move can simply be played.
 
-    call BUI_MakeMoveMarkSquaresForRedraw
+    call BUI_MakeCastleEpSquaresForRedraw
 
     call Engine_MakeMove    ;BC still has the move stored
 
@@ -470,7 +471,7 @@ BUI_StateSelectDestination:
 
     ret
 .promotionMove:
-    ;in the case of a promotion the chessboard draws like this:
+    ;in the case of a promotion the chessboard draws the new piece options like this:
     ;
     ; . . . Q . . . .
     ; . . . N . . . .
@@ -478,13 +479,60 @@ BUI_StateSelectDestination:
     ; . . . R . . . .
     ;
 
-    ;promotion square offset
+    ;zero BUI_SquareToMove. Can't use BUI_ClearSelectedSquare since that
+    ;also clears BUI_MovesForSelectedPiece which is still needed.
+    ld hl, BUI_SquareToMove
+    ld (hl), 0
+    ld de, BUI_SquareToMove+1
+    ld bc, 191              ;64 * 3 - 1
+    ldir
+
+    ;promotion square offset. Note this will be used to go from the edge of the board
+    ;where the pawn is promoting to towards the center.
     ld a, (C_CurrentColor)  ;current color = 0 (B) | 8 (W)
-    add a                   ;(-2*CurrentColor+8) = 8 (B) | -8 (W)
+    add a                   ;(-2*CurrentColor+8) = 24 (B) | -24 (W)
+    ld c, a                 ;C=A*2
+    add a, a                ;A=A*4
+    add c                   ;A=A*6 = 0 (B) | 48 (W)
     neg
-    add 8
+    add 24
+
+    exx ;alt reg start
+    ld hl, BUI_SquareToMove
+    ld bc, 0                ;load square offset into BC'
     ld c, a
 
+    ld a, (_BUI_CursorPosition)
+    ld de, 0
+    ld e, a                 ;DE = A * 3
+    add a, a
+    add e
+    ld e, a
+    add hl, de              ;offset BUI_SquareToMove to move destination square
+    exx ;alt reg end
+
+    ld ix, BUI_MovesForSelectedPiece
+    ld a, (_BUI_SelectedSquareMoveCount)
+    ld b, a
+.promotionMoveLoop:
+    ld de, (ix)             ;get next move
+    lea ix, ix+3
+    ld (_BUI_Move), de
+
+    ld a, (_BUI_Move_End)   ;check that moves destination matches cursor position
+    ld hl, _BUI_CursorPosition
+    cp (hl)
+    jr nz, .promotionMoveLoopContinue
+
+    push de                 ;transfer move in DE to DE'
+    exx ;alt reg start
+    pop de
+    ld (hl), de             ;store in BUI_SquareToMove
+    add hl, bc              ;offset BUI_SquareToMove (-24 | 24)
+    exx ;alt reg end
+
+.promotionMoveLoopContinue:
+    djnz .promotionMoveLoop
 
     ld a, BUI_STATE_SELECT_PROMOTION
     ld (_BUI_State), a
@@ -492,7 +540,7 @@ BUI_StateSelectDestination:
     ret
 .noMoveAtSquare:
 
-    ;add enter keypress into queue so that Select Piece state tries to
+    ;add ENTER keypress into queue so that Select Piece state tries to
     ;select the current square without pressing twice. However, if the
     ;cursor is on the selected square don't incremented so that the
     ;piece doesn't get re-selected again.

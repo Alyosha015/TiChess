@@ -2,7 +2,7 @@ U_EQUALDEHL_DE: dl 0
 U_EQUALDEHL_HL: dl 0
 
 ;****************************************************************
-; Util_EqualDEHL - check if values in DE and HL are equal
+; Util_EqualDEHL - Check if 3-byte values in DE and HL are equal.
 ;
 ; INPUT: 
 ;   DE - value
