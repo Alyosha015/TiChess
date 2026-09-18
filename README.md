@@ -4,7 +4,7 @@ Project to write a chess engine for the TI-84 Plus CE.
 
 As of August 2026, the move generator has been completed and passed perft tests on 125 positions to a depth of 5.
 
-![Board](media/ui_startposition.png)
+![Board](media/ui_selectedpiece.png)
 
 ## Download
 

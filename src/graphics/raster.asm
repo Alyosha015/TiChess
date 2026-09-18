@@ -9,7 +9,7 @@
 ;   L   = Height
 ;   A   = Color
 ;
-; PRESERVES: A, B', HL'
+; PRESERVES: A, A', B', HL'
 ;****************************************************************
 GFX_FillRectangle:
     ;register data:

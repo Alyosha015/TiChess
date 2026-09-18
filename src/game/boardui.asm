@@ -14,6 +14,7 @@ _BUI_State: db BUI_STATE_LOAD_LEGAL_MOVES
 _BUI_CursorPosition: db 0
 _BUI_SelectedSquare: db -1
 _BUI_SelectedSquareMoveCount: db 0
+_BUI_SelectedPromotionSquare: db 0  ;stores destination square of promoting pawn
 
 _BUI_LegalMoves: dl 0       ;stores pointer to allocated move list
 _BUI_LegalMovesCount: db 0  ;number of legal moves
@@ -219,10 +220,45 @@ BUI_ClearSelectedSquare:
 
     ld a, -1
     ld (_BUI_SelectedSquare), a
+    ld (_BUI_SelectedPromotionSquare), a
 
     xor a
     ld (_BUI_HasPromotionMove), a
     ld (_BUI_SelectedSquareMoveCount), a
+
+    ret
+
+;****************************************************************
+; BUI_ClearPromotionSelectionSquares - (internal) Mark the
+;   squares used for showing pieces promotion options to redraw.
+;   Used when entering and exiting promotion selection state.
+;
+; DESTROYS: A, DE, BC, IX
+;****************************************************************
+BUI_ClearPromotionSelectionSquares:
+    ld a, (_BUI_SelectedPromotionSquare)
+
+    ld ix, BUI_DirtySquares
+    ld de, 0
+    ld e, a                 ;move end square
+    add ix, de
+
+    ld a, (C_CurrentColor)
+    add a
+    jr z, .colorIsBlack
+    ld de, $FFFFFF          ;is white is promoting, the offset should be -8 so DE
+.colorIsBlack:              ;needs to be all 1's. Otherwise it's already $0000XX
+
+    neg
+    add 8
+    ld e, a
+
+    ld b, 4
+.loop:
+    ld (ix), 1
+    add ix, de
+
+    djnz .loop
 
     ret
 
@@ -452,18 +488,16 @@ BUI_StateSelectDestination:
     or a                    ;clear carry flag
     sbc hl, hl              ;clear hl
     sbc hl, bc              ;zero flag will be set if BC=0
-    jr z, .noMoveAtSquare
+    jp z, .noMoveAtSquare
 .moveAtSquare:
     ld a, (_BUI_HasPromotionMove)
     or a
     jr nz, .promotionMove
 .notPromotionMove:
-    ;if it's not a promotion move, the move can simply be played.
+    ;if it's not a promotion move, the move can be played now.
 
     call BUI_MakeCastleEpSquaresForRedraw
-
     call Engine_MakeMove    ;BC still has the move stored
-
     call BUI_ClearSelectedSquare
 
     ld a, BUI_STATE_LOAD_LEGAL_MOVES
@@ -497,18 +531,24 @@ BUI_StateSelectDestination:
     neg
     add 24
 
-    exx ;alt reg start
-    ld hl, BUI_SquareToMove
-    ld bc, 0                ;load square offset into BC'
+    exx ;alt reg start    
+    ld bc, $FFFFFF          ;load square offset into BC'
+    jp m, .offsetIsNegative
+    ld bc, 0
+.offsetIsNegative:
+    
     ld c, a
 
     ld a, (_BUI_CursorPosition)
+    ld (_BUI_SelectedPromotionSquare), a
     ld de, 0
     ld e, a                 ;DE = A * 3
     add a, a
     add e
     ld e, a
-    add hl, de              ;offset BUI_SquareToMove to move destination square
+
+    ld hl, BUI_SquareToMove ;offset BUI_SquareToMove to move destination square
+    add hl, de
     exx ;alt reg end
 
     ld ix, BUI_MovesForSelectedPiece
@@ -533,6 +573,9 @@ BUI_StateSelectDestination:
 
 .promotionMoveLoopContinue:
     djnz .promotionMoveLoop
+
+    call BUI_ClearPromotionSelectionSquares
+    call GFX_LoadColorPalettePromotion
 
     ld a, BUI_STATE_SELECT_PROMOTION
     ld (_BUI_State), a
@@ -561,6 +604,53 @@ BUI_StateSelectDestination:
     ret
 
 BUI_StateSelectPromotion:
+    ;early return until enter keypress
+    ld hl, Cursor_EnterPressed
+    ld a, (hl)
+    or a
+    ret z
+
+    dec (hl)                ;clear enter keypress
+
+    ;can be loaded now since the palette returns to normal
+    ;in both cases of either playing a promotion move or
+    ;canceling the promotion move.
+    call GFX_LoadColorPaletteNormal
+
+    ;load move at cursor position
+    ld a, (_BUI_CursorPosition)
+    ld d, 3
+    ld e, a
+    mlt de
+    ld hl, BUI_SquareToMove
+    add hl, de
+    ld bc, (hl)
+    ld (_BUI_Move), bc
+
+    ;check if move is zero
+    or a                    ;clear carry flag
+    sbc hl, hl              ;clear hl
+    sbc hl, bc              ;zero flag will be set if BC=0
+    jr z, .noMoveAtSquare
+
+    ;play promotion move
+
+    call Engine_MakeMove    ;BC still has the move stored
+    call BUI_ClearPromotionSelectionSquares
+    call BUI_ClearSelectedSquare
+
+    ld a, BUI_STATE_LOAD_LEGAL_MOVES
+    ld (_BUI_State), a
+
+    ret
+.noMoveAtSquare:            ;if no move, reset to selecting a piece
+    ;cancel move
+    
+    call BUI_ClearPromotionSelectionSquares
+    call BUI_ClearSelectedSquare
+
+    ld a, BUI_STATE_SELECT_PIECE
+    ld (_BUI_State), a
 
     ret
 
@@ -672,7 +762,7 @@ BUI_DrawSquare:
     ld a, COLOR_BOARD_WHITE
     jr c, .isOdd
 .isEven:
-    inc a                   ;COLOR_BOARD_BLACK is (COLOR_BOARD_WHITE + 1)
+    dec a                   ;COLOR_BOARD_BLACK is (COLOR_BOARD_WHITE - 1)
     dec e                   ;if black decrement to make E=0
 .isOdd:
     ex af, af'              ;preserve color
@@ -730,9 +820,8 @@ BUI_DrawSquare:
     ld a, (hl)
     ld (_bui_square_piece), a
 
-    ;draw move destination markers
-    ;if there is a chess piece on the board draw the large circle marker,
-    ;if the square is empty draw the small marker instead.
+    ;draw move destination markers / piece selection for promotion mode.
+    ;if in promotion mode, MOVE_FLAG + 1 gives the piece type to draw 
     ld hl, BUI_SquareToMove
     ld de, (_bui_index)
     ld d, 3
@@ -744,8 +833,18 @@ BUI_DrawSquare:
     sbc hl, bc              ;zero flag will be set if BC=0
     jr z, .skipDrawMoveDestinationMarker
 
+    ld a, (_BUI_State)
+    cp BUI_STATE_SELECT_PROMOTION
+    jr nz, .skipPromotionMode
+;( .promotionMode: )
+
+    call BUI_DrawSquarePromotion    ;note move for this square is in BC.
+
+    jr .skipDrawChessPiece  ;skip drawing marker and normal piece
+.skipPromotionMode:
     ld ix, SPRITE_MOVE_DESTINATION_MARKER_SMALL
-    or a                    ;note that A has the chess piece in it from _bui_square_piece loading above
+    ld a, (_bui_square_piece)
+    or a
     jr z, .hasNoChessPiece
     ld ix, SPRITE_MOVE_DESTINATION_MARKER_LARGE
 .hasNoChessPiece:
@@ -753,11 +852,8 @@ BUI_DrawSquare:
     ld de, (_bui_square_y)
     ld hl, COLOR_BOARD_LEGAL_MOVE_WHITE * 256 + COLOR_TRANSPARENT
     ld a, (_bui_square_color)
-    or a
-    jr nz, .destMarkerSquareWhite
-;( .destMarkerSquareBlack: )
-    inc h
-.destMarkerSquareWhite:
+    add COLOR_BOARD_LEGAL_MOVE_BLACK
+    ld h, a
 
     call GFX_Sprite1Bpp
 .skipDrawMoveDestinationMarker:
@@ -778,14 +874,14 @@ BUI_DrawSquare:
     ld bc, (_bui_square_x)
     ld de, (_bui_square_y)
 
-    ld hl, COLOR_BOARD_PIECE_WHITE * 256 + COLOR_TRANSPARENT
+    ld hl, COLOR_BOARD_PIECE_BLACK * 256 + COLOR_TRANSPARENT
 
     ld a, (_bui_square_piece)
     and MASK_PIECE_COLOR
     or a
-    jr nz, .pieceIsWhite
-    inc h                   ;COLOR_BOARD_PIECE_BLACK is (COLOR_BOARD_PIECE_WHITE + 1)
-.pieceIsWhite:
+    jr z, .pieceIsBlack
+    inc h                   ;COLOR_BOARD_PIECE_WHITE is (COLOR_BOARD_PIECE_BLACK + 1)
+.pieceIsBlack:
 
     call GFX_Sprite1Bpp
 
@@ -803,5 +899,54 @@ BUI_DrawSquare:
     ld hl, COLOR_BOARD_CURSOR * 256 + COLOR_TRANSPARENT
     call GFX_Sprite1Bpp
 .skipDrawCursor:
+
+    ret
+
+;****************************************************************
+; BUI_DrawSquarePromotion - Called from BUI_DrawSquare, used when
+;   in promotion mode to draw squares with the piece selection. 
+;
+; INPUT:
+;   BC - Move at square (from BUI_SquareToMove)
+;
+; DESTROYS: All
+;****************************************************************
+BUI_DrawSquarePromotion:
+    ;cursor is still drawn later by BUI_DrawSquare after this function returns,
+    ;so this function only needs to handle drawing the square itself, piece,
+    ;and any rank/file labels if those are added later.
+
+    ld (_BUI_Move), bc      ;get piece type
+    ld a, (_BUI_Move_Flag)
+    inc a
+    ex af, af'
+
+    ld a, (_bui_square_color)
+    add COLOR_BOARD_P_BLACK
+    
+    ld bc, (_bui_square_x)
+    ld de, (_bui_square_y)
+    ld hl, 30 * 256 + 30
+    call GFX_FillRectangle
+
+    ex af, af'              ;restore piece type (GFX_FillRectangle preserves A')
+    
+    ld e, a                 ;get sprite pointer
+    ld d, 3
+    mlt de
+    ld hl, SPRITE_PIECE_TABLE
+    add hl, de
+    ld ix, (hl)
+
+    ld bc, (_bui_square_x)
+    ld de, (_bui_square_y)
+
+    ld hl, COLOR_BOARD_PIECE_BLACK * 256 + COLOR_TRANSPARENT
+
+    ld a, (C_CurrentIndex)
+    add COLOR_BOARD_P_PIECE_BLACK
+    ld h, a
+
+    call GFX_Sprite1Bpp
 
     ret
