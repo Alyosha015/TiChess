@@ -30,6 +30,7 @@
     include "game/game.asm"
     include "game/cursor.asm"
     include "game/boardui.asm"
+    include "game/sidebarui.asm"
 
     ;chess engine
     include "chess/variables.asm"
@@ -44,9 +45,9 @@
     include "chess/movegen.asm"
 
     ;debug and testing
-    include "chess/test/dbg_move_generator.asm"
-    include "chess/test/perft.asm"
-    include "chess/test/perft_data.asm"
+    ;include "chess/test/dbg_move_generator.asm"
+    ;include "chess/test/perft.asm"
+    ;include "chess/test/perft_data.asm"
 
     include "debug/dbg_vars.asm"
 
